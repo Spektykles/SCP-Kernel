@@ -67,7 +67,11 @@
 #include <linux/kexec.h>
 #include <linux/bpf.h>
 #include <linux/mount.h>
+<<<<<<< HEAD
 #include <linux/userfaultfd_k.h>
+=======
+#include <linux/tty.h>
+>>>>>>> 0ecdde5947e7... security: tty: make TIOCSTI ioctl require CAP_SYS_ADMIN
 
 #include "../lib/kstrtox.h"
 
@@ -317,19 +321,11 @@ static struct ctl_table sysctl_base_table[] = {
 	{ }
 };
 
-<<<<<<< HEAD
 #if defined(CONFIG_SCHED_DEBUG) && !defined(CONFIG_SCHED_BMQ)
-static int min_sched_granularity_ns = 100000;		/* 100 usecs */
-static int max_sched_granularity_ns = NSEC_PER_SEC;	/* 1 second */
-static int min_wakeup_granularity_ns;			/* 0 usecs */
-static int max_wakeup_granularity_ns = NSEC_PER_SEC;	/* 1 second */
-=======
-#ifdef CONFIG_SCHED_DEBUG
 static int min_sched_granularity_ns __read_only = 100000;		/* 100 usecs */
-static int max_sched_granularity_ns __read_only = NSEC_PER_SEC;	/* 1 second */
+static int max_sched_granularity_ns __read_only = NSEC_PER_SEC;		/* 1 second */
 static int min_wakeup_granularity_ns __read_only;			/* 0 usecs */
 static int max_wakeup_granularity_ns __read_only = NSEC_PER_SEC;	/* 1 second */
->>>>>>> 5a0209c507de... make sysctl constants read-only
 #ifdef CONFIG_SMP
 static int min_sched_tunable_scaling __read_only = SCHED_TUNABLESCALING_NONE;
 static int max_sched_tunable_scaling __read_only = SCHED_TUNABLESCALING_END-1;
@@ -937,6 +933,17 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &zero,
 		.extra2		= &two,
 	},
+#endif
+#if defined CONFIG_TTY
+	  {
+		.procname	= "tiocsti_restrict",
+		.data		= &tiocsti_restrict,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax_sysadmin,
+		.extra1		= &zero,
+		.extra2		= &one,
+	  },
 #endif
 	{
 		.procname	= "device_sidechannel_restrict",

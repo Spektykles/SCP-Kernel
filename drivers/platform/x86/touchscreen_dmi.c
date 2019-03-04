@@ -215,6 +215,22 @@ static const struct ts_dmi_data digma_citi_e200_data = {
 	.properties	= digma_citi_e200_props,
 };
 
+static const struct property_entry digma_citi_e202_props[] = {
+	PROPERTY_ENTRY_U32("touchscreen-size-x", 1980),
+	PROPERTY_ENTRY_U32("touchscreen-size-y", 1500),
+	PROPERTY_ENTRY_BOOL("touchscreen-inverted-y"),
+	PROPERTY_ENTRY_STRING("firmware-name",
+			      "gsl1686-digma_citi_e200.fw"),
+	PROPERTY_ENTRY_U32("silead,max-fingers", 10),
+	PROPERTY_ENTRY_BOOL("silead,home-button"),
+	{ }
+};
+
+static const struct ts_dmi_data digma_citi_e202_data = {
+	.acpi_name	= "MSSL1680:00",
+	.properties	= digma_citi_e202_props,
+};
+
 static const struct property_entry gp_electronic_t701_props[] = {
 	PROPERTY_ENTRY_U32("touchscreen-size-x", 960),
 	PROPERTY_ENTRY_U32("touchscreen-size-y", 640),
@@ -687,6 +703,15 @@ static const struct dmi_system_id touchscreen_dmi_table[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Digma"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "CITI E200"),
+			DMI_MATCH(DMI_BOARD_NAME, "Cherry Trail CR"),
+		},
+	},
+	{
+		/* Digma Citi E202 */
+		.driver_data = (void *)&digma_citi_e202_data,
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Digma"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "CITI E202"),
 			DMI_MATCH(DMI_BOARD_NAME, "Cherry Trail CR"),
 		},
 	},

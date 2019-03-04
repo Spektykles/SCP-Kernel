@@ -577,7 +577,7 @@ static int snd_byt_cht_es8316_mc_probe(struct platform_device *pdev)
 		dev_err(dev, "snd_soc_register_card failed: %d\n", ret);
 		return ret;
 	}
-	platform_set_drvdata(pdev, &byt_cht_es8316_card);
+	platform_set_drvdata(pdev, priv);
 	return 0;
 }
 

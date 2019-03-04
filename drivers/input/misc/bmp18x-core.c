@@ -52,6 +52,7 @@
 #include <linux/delay.h>
 #include <linux/input.h>
 #include <linux/workqueue.h>
+#include <linux/module.h>
 #include "bmp18x.h"
 
 #define BMP18X_CHIP_ID			0x55
@@ -69,7 +70,7 @@
 
 #define ABS_MIN_PRESSURE	30000
 #define ABS_MAX_PRESSURE	120000
-#define BMP_DELAY_DEFAULT   200
+#define BMP_DELAY_DEFAULT	200
 
 struct bmp18x_calibration_data {
 	s16 AC1, AC2, AC3;

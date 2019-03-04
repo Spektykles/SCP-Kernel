@@ -424,7 +424,7 @@ if NET_SCH_DEFAULT
 
 choice
 	prompt "Default queuing discipline"
-	default DEFAULT_PFIFO_FAST
+	default DEFAULT_CAKE
 	help
 	  Select the queueing discipline that will be used by default
 	  for all network devices.

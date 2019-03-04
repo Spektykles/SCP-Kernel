@@ -1376,6 +1376,9 @@ endif # CONFIG_MODULES
 CLEAN_DIRS  += $(MODVERDIR) include/ksym
 CLEAN_FILES += modules.builtin.modinfo
 
+CLEAN_FILES += tools/objtool/objtool tools/objtool/fixdep \
+           tools/objtool/arch/$(ARCH)/lib/inat-tables.c
+
 # Directories & files removed with 'make mrproper'
 MRPROPER_DIRS  += include/config include/generated          \
 		  arch/$(SRCARCH)/include/generated .tmp_objdiff

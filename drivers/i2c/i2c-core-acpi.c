@@ -97,10 +97,12 @@ static int i2c_acpi_fill_info(struct acpi_resource *ares, void *data)
 
 static const struct acpi_device_id i2c_acpi_ignored_device_ids[] = {
 	/*
-	 * ACPI video acpi_devices, which are handled by the acpi-video driver
+	 * ACPI some acpi_devices, which are handled by the acpi drivers
 	 * sometimes contain a SERIAL_TYPE_I2C ACPI resource, ignore these.
 	 */
 	{ ACPI_VIDEO_HID, 0 },
+	{ ACPI_POWER_HID, 0 },
+	{ ACPI_I2C_DEVICE_HID, 0 },
 	{}
 };
 

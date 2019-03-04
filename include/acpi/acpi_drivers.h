@@ -48,6 +48,8 @@
 #define ACPI_ECDT_HID			"LNXEC"
 /* Quirk for broken IBM BIOSes */
 #define ACPI_SMBUS_IBM_HID		"SMBUSIBM"
+/* Quirk for broken Intel Atom BIOSes */
+#define ACPI_I2C_DEVICE_HID		"ITE8566"
 
 /*
  * For fixed hardware buttons, we fabricate acpi_devices with HID

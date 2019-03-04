@@ -1893,7 +1893,7 @@ static void gpiochip_set_irq_hooks(struct gpio_chip *gpiochip)
 		 * practice.
 		 */
 		chip_info(gpiochip,
-			  "detected irqchip that is shared with multiple gpiochips: please fix the driver.\n");
+			  "detected irqchip that is shared with multiple gpiochips.\n");
 		return;
 	}
 	gpiochip->irq.irq_enable = irqchip->irq_enable;

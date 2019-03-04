@@ -768,6 +768,9 @@ else
 ifndef CONFIG_FUNCTION_TRACER
 KBUILD_CFLAGS	+= -fomit-frame-pointer
 endif
+ifdef CONFIG_UNWINDER_ORC
+KBUILD_CFLAGS	+= -fno-optimize-sibling-calls
+endif
 endif
 
 # Initialize all stack variables with a pattern, if desired.

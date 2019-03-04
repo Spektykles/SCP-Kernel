@@ -993,8 +993,8 @@ config NR_CPUS_RANGE_END
 config NR_CPUS_RANGE_END
 	int
 	depends on X86_64
-	default 8192 if  SMP && ( MAXSMP ||  CPUMASK_OFFSTACK)
-	default  512 if  SMP && (!MAXSMP && !CPUMASK_OFFSTACK)
+	default  64  if  SMP && ( MAXSMP ||  CPUMASK_OFFSTACK)
+	default  64 if  SMP && (!MAXSMP && !CPUMASK_OFFSTACK)
 	default    1 if !SMP
 
 config NR_CPUS_DEFAULT
@@ -1007,7 +1007,7 @@ config NR_CPUS_DEFAULT
 config NR_CPUS_DEFAULT
 	int
 	depends on X86_64
-	default 8192 if  MAXSMP
+	default   64 if  MAXSMP
 	default   64 if  SMP
 	default    1 if !SMP
 
@@ -1018,7 +1018,7 @@ config NR_CPUS
 	---help---
 	  This allows you to specify the maximum number of CPUs which this
 	  kernel will support.  If CPUMASK_OFFSTACK is enabled, the maximum
-	  supported value is 8192, otherwise the maximum value is 512.  The
+	  supported value is 64, otherwise the maximum value is 512.  The
 	  minimum value which makes sense is 2.
 
 	  This is purely to save memory: each supported CPU adds about 8KB

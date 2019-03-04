@@ -71,11 +71,11 @@ static const struct always_present_id always_present_ids[] = {
 	 */
 	ENTRY("SYNA7500", "1", ICPU(INTEL_FAM6_HASWELL_ULT), {
 		DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
-		DMI_MATCH(DMI_PRODUCT_NAME, "Venue 11 Pro 7130"),
+		DMI_MATCH(DMI_PRODUCT_NAME, "Venue 11 Pro 7130")
 	      }),
 	ENTRY("SYNA7500", "1", ICPU(INTEL_FAM6_HASWELL_ULT), {
 		DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
-		DMI_MATCH(DMI_PRODUCT_NAME, "Venue 11 Pro 7139"),
+		DMI_MATCH(DMI_PRODUCT_NAME, "Venue 11 Pro 7139")
 	      }),
 
 	/*
@@ -106,6 +106,14 @@ static const struct always_present_id always_present_ids[] = {
 		DMI_MATCH(DMI_BOARD_NAME, "Default string"),
 		DMI_MATCH(DMI_PRODUCT_NAME, "Default string"),
 		DMI_MATCH(DMI_BIOS_DATE, "05/25/2017")
+	      }),
+
+	/*
+	 * Enable sound for Toshiba Satellite Click 10 LX0W-C - C64M
+	 */
+	ENTRY("10EC5672", "1", ICPU(INTEL_FAM6_ATOM_AIRMONT), {
+		DMI_MATCH(DMI_SYS_VENDOR, "TOSHIBA"),
+		DMI_MATCH(DMI_PRODUCT_NAME, "Satellite LX0W-C")
 	      }),
 };
 

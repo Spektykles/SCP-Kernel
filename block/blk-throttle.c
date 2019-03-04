@@ -1430,8 +1430,10 @@ static ssize_t tg_set_conf(struct kernfs_open_file *of,
 	if (ret)
 		return ret;
 
-	ret = -EINVAL;
-	if (sscanf(ctx.body, "%llu", &v) != 1)
+	/* remove trailing spaces, kstrto* are strict about them */
+	ctx.body = strim(ctx.body);
+	ret = kstrtou64(ctx.body, 10, &v);
+	if (ret)
 		goto out_finish;
 	if (!v)
 		v = U64_MAX;
@@ -1441,7 +1443,8 @@ static ssize_t tg_set_conf(struct kernfs_open_file *of,
 	if (is_u64)
 		*(u64 *)((void *)tg + of_cft(of)->private) = v;
 	else
-		*(unsigned int *)((void *)tg + of_cft(of)->private) = v;
+		*(unsigned int *)((void *)tg + of_cft(of)->private) =
+							min_t(u64, v, UINT_MAX);
 
 	tg_conf_updated(tg, false);
 	ret = 0;
@@ -1606,22 +1609,24 @@ static ssize_t tg_set_limit(struct kernfs_open_file *of,
 	idle_time = tg->idletime_threshold_conf;
 	latency_time = tg->latency_target_conf;
 	while (true) {
-		char tok[27];	/* wiops=18446744073709551616 */
-		char *p;
-		u64 val = U64_MAX;
-		int len;
-
-		if (sscanf(ctx.body, "%26s%n", tok, &len) != 1)
-			break;
-		if (tok[0] == '\0')
-			break;
-		ctx.body += len;
+		char tok[8];	/* "latency" */
+		char buf[21];	/* U64_MAX */
+		int end;
+		u64 val;
 
 		ret = -EINVAL;
-		p = tok;
-		strsep(&p, "=");
-		if (!p || (sscanf(p, "%llu", &val) != 1 && strcmp(p, "max")))
+		if (sscanf(ctx.body, "%7[^=]=%20s %n", tok, buf, &end) != 2)
 			goto out_finish;
+
+		/* skip this field and trailing spaces */
+		ctx.body += end;
+
+		ret = kstrtou64(buf, 10, &val);
+		if (ret) {
+			if (strcmp(buf, "max"))
+				goto out_finish;
+			val = U64_MAX;
+		}
 
 		ret = -ERANGE;
 		if (!val)
@@ -1642,6 +1647,9 @@ static ssize_t tg_set_limit(struct kernfs_open_file *of,
 			latency_time = val;
 		else
 			goto out_finish;
+
+		if (!*ctx.body)
+			break;
 	}
 
 	tg->bps_conf[READ][index] = v[0];

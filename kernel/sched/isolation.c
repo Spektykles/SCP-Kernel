@@ -56,8 +56,10 @@ void __init housekeeping_init(void)
 
 	static_branch_enable(&housekeeping_overridden);
 
+#ifdef CONFIG_NO_HZ_FULL
 	if (housekeeping_flags & HK_FLAG_TICK)
 		sched_tick_offload_init();
+#endif
 
 	/* We need at least one CPU to handle housekeeping work */
 	WARN_ON_ONCE(cpumask_empty(housekeeping_mask));

@@ -5,7 +5,7 @@
 
 choice
 	prompt "Timer frequency"
-	default HZ_500 if SCHED_PDS
+	default HZ_750 if SCHED_PDS
 	default HZ_250_NODEF if !SCHED_PDS
 
 	help
@@ -52,6 +52,13 @@ choice
 	 on desktops with great smoothness without increasing CPU power
 	 consumption and sacrificing the battery life on laptops.
 
+	config HZ_750
+		bool "750 HZ"
+	help
+	 750 Hz is a hard timer frequency. Provides ultrafast interactivity
+	 on desktops with great smoothness without increasing CPU power
+	 consumption and sacrificing the battery life on laptops.
+
 	config HZ_1000_NODEF
 		bool "1000 HZ"
 	help
@@ -65,7 +72,8 @@ config HZ
 	default 100 if HZ_100_NODEF
 	default 250 if HZ_250_NODEF
 	default 300 if HZ_300_NODEF
-	default 500 if HZ_500
+	default 500 if HZ_500_NODEF
+	default 750 if HZ_750
 	default 1000 if HZ_1000_NODEF
 
 config SCHED_HRTICK

@@ -224,6 +224,7 @@ static const struct cis_tpl cis_tpl_list[] = {
 	{	0x20,	4,	cistpl_manfid		},
 	{	0x21,	2,	/* cistpl_funcid */	},
 	{	0x22,	0,	cistpl_funce		},
+	{	0x80,	2,	/* cistpl_sdio_std */	},
 	{	0x91,	2,	/* cistpl_sdio_std */	},
 };
 

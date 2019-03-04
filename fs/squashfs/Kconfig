@@ -108,6 +108,17 @@ config SQUASHFS_XATTR
 
 	  If unsure, say N.
 
+config SQUASHFS_POSIX_ACL
+	bool "Squashfs POSIX ACL support"
+	depends on SQUASHFS_XATTR
+	select FS_POSIX_ACL
+	help
+	  Saying Y here includes support for Access Control Lists (acls).
+	  Acls are used to define more fine-grained discretionary access
+	  rights for files and directories (see the acl(5) manual page).
+
+	  If unsure, say N.
+
 config SQUASHFS_ZLIB
 	bool "Include support for ZLIB compressed file systems"
 	depends on SQUASHFS

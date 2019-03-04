@@ -29,6 +29,7 @@
 #include "squashfs_fs_i.h"
 #include "squashfs.h"
 #include "xattr.h"
+#include "acl.h"
 
 static int squashfs_symlink_readpage(struct file *file, struct page *page)
 {
@@ -105,7 +106,8 @@ const struct address_space_operations squashfs_symlink_aops = {
 };
 
 const struct inode_operations squashfs_symlink_inode_ops = {
-	.get_link = page_get_link,
-	.listxattr = squashfs_listxattr
+	.get_link	= page_get_link,
+	.listxattr	= squashfs_listxattr,
+	.get_acl	= squashfs_get_acl
 };
 

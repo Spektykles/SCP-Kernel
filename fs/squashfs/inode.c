@@ -35,6 +35,7 @@
 #include "squashfs_fs_i.h"
 #include "squashfs.h"
 #include "xattr.h"
+#include "acl.h"
 
 /*
  * Initialise VFS inode with the base inode information common to all
@@ -412,6 +413,7 @@ failed_read:
 
 
 const struct inode_operations squashfs_inode_ops = {
-	.listxattr = squashfs_listxattr
+	.listxattr	= squashfs_listxattr,
+	.get_acl	= squashfs_get_acl
 };
 

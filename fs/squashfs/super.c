@@ -184,6 +184,9 @@ static int squashfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	sb->s_flags |= SB_RDONLY;
+#ifdef CONFIG_SQUASHFS_POSIX_ACL
+	sb->s_flags |= SB_POSIXACL;
+#endif
 	sb->s_op = &squashfs_super_ops;
 
 	err = -ENOMEM;

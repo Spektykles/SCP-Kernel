@@ -51,6 +51,7 @@
 #include "squashfs_fs_i.h"
 #include "squashfs.h"
 #include "xattr.h"
+#include "acl.h"
 
 /*
  * Lookup name in the directory index, returning the location of the metadata
@@ -233,6 +234,7 @@ failed:
 
 
 const struct inode_operations squashfs_dir_inode_ops = {
-	.lookup = squashfs_lookup,
-	.listxattr = squashfs_listxattr
+	.lookup		= squashfs_lookup,
+	.listxattr	= squashfs_listxattr,
+	.get_acl	= squashfs_get_acl
 };

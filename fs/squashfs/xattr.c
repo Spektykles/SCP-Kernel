@@ -20,6 +20,7 @@
 #include "squashfs_fs_sb.h"
 #include "squashfs_fs_i.h"
 #include "squashfs.h"
+#include "acl.h"
 
 static const struct xattr_handler *squashfs_xattr_handler(int);
 
@@ -102,7 +103,7 @@ failed:
 }
 
 
-static int squashfs_xattr_get(struct inode *inode, int name_index,
+int squashfs_xattr_get(struct inode *inode, int name_index,
 	const char *name, void *buffer, size_t buffer_size)
 {
 	struct super_block *sb = inode->i_sb;
@@ -220,6 +221,24 @@ static const struct xattr_handler squashfs_xattr_user_handler = {
 };
 
 /*
+ * ACL access namespace support
+ */
+static const struct xattr_handler squashfs_xattr_acl_access_handler = {
+	.prefix	= XATTR_SYSTEM_PREFIX,
+	.flags	= SQUASHFS_XATTR_POSIX_ACL_ACCESS,
+	.get	= squashfs_xattr_handler_get
+};
+
+/*
+ * ACL default namespace support
+ */
+static const struct xattr_handler squashfs_xattr_acl_default_handler = {
+	.prefix	= XATTR_SYSTEM_PREFIX,
+	.flags	= SQUASHFS_XATTR_POSIX_ACL_DEFAULT,
+	.get	= squashfs_xattr_handler_get
+};
+
+/*
  * Trusted namespace support
  */
 static bool squashfs_trusted_xattr_handler_list(struct dentry *d)
@@ -252,6 +271,12 @@ static const struct xattr_handler *squashfs_xattr_handler(int type)
 	switch (type & SQUASHFS_XATTR_PREFIX_MASK) {
 	case SQUASHFS_XATTR_USER:
 		return &squashfs_xattr_user_handler;
+#ifdef CONFIG_SQUASHFS_POSIX_ACL
+	case SQUASHFS_XATTR_POSIX_ACL_ACCESS:
+		return &squashfs_xattr_acl_access_handler;
+	case SQUASHFS_XATTR_POSIX_ACL_DEFAULT:
+		return &squashfs_xattr_acl_default_handler;
+#endif
 	case SQUASHFS_XATTR_TRUSTED:
 		return &squashfs_xattr_trusted_handler;
 	case SQUASHFS_XATTR_SECURITY:
@@ -264,6 +289,10 @@ static const struct xattr_handler *squashfs_xattr_handler(int type)
 
 const struct xattr_handler *squashfs_xattr_handlers[] = {
 	&squashfs_xattr_user_handler,
+#ifdef CONFIG_SQUASHFS_POSIX_ACL
+	&squashfs_xattr_acl_access_handler,
+	&squashfs_xattr_acl_default_handler,
+#endif
 	&squashfs_xattr_trusted_handler,
 	&squashfs_xattr_security_handler,
 	NULL

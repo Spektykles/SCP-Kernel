@@ -235,8 +235,6 @@ list using a second xattr id lookup table.
 4.1 Todo list
 -------------
 
-Implement ACL support.
-
 4.2 Squashfs internal cache
 ---------------------------
 

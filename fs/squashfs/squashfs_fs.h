@@ -94,11 +94,13 @@
 #define SQUASHFS_MAX_DIR_TYPE		7
 
 /* Xattr types */
-#define SQUASHFS_XATTR_USER             0
-#define SQUASHFS_XATTR_TRUSTED          1
-#define SQUASHFS_XATTR_SECURITY         2
-#define SQUASHFS_XATTR_VALUE_OOL        256
-#define SQUASHFS_XATTR_PREFIX_MASK      0xff
+#define SQUASHFS_XATTR_USER			0
+#define SQUASHFS_XATTR_POSIX_ACL_ACCESS		1
+#define SQUASHFS_XATTR_POSIX_ACL_DEFAULT	2
+#define SQUASHFS_XATTR_TRUSTED			3
+#define SQUASHFS_XATTR_SECURITY			4
+#define SQUASHFS_XATTR_VALUE_OOL		256
+#define SQUASHFS_XATTR_PREFIX_MASK		0xff
 
 /* Flag whether block is compressed or uncompressed, bit is set if block is
  * uncompressed */

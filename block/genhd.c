@@ -325,8 +325,10 @@ void blkdev_show(struct seq_file *seqf, off_t offset)
 
 	mutex_lock(&block_class_lock);
 	for (dp = major_names[major_to_index(offset)]; dp; dp = dp->next)
-		if (dp->major == offset)
+		if (dp->major == offset) {
 			seq_printf(seqf, "%3d %s\n", dp->major, dp->name);
+			break;
+		}
 	mutex_unlock(&block_class_lock);
 }
 #endif /* CONFIG_PROC_FS */

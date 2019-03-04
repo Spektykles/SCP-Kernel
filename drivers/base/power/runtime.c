@@ -826,8 +826,10 @@ static int rpm_resume(struct device *dev, int rpmflags)
 		if (!parent->power.disable_depth
 		    && !parent->power.ignore_children) {
 			rpm_resume(parent, 0);
-			if (parent->power.runtime_status != RPM_ACTIVE)
+			if (parent->power.runtime_status != RPM_ACTIVE) {
+				dev_err(dev, "rpm_resume exiting with EBUSY because our parent did not resume\n");
 				retval = -EBUSY;
+			}
 		}
 		spin_unlock(&parent->power.lock);
 

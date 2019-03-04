@@ -293,6 +293,9 @@ static int ti_opp_supply_set_opp(struct dev_pm_set_opp_data *data)
 	if (new_supply_vdd->u_volt_min < vdd_uv)
 		new_supply_vdd->u_volt_min = vdd_uv;
 
+	if (new_supply_vdd->u_volt_min < vdd_uv)
+		new_supply_vdd->u_volt_min = vdd_uv;
+
 	/* Scaling up? Scale voltage before frequency */
 	if (freq > old_freq) {
 		ret = _opp_set_voltage(dev, new_supply_vdd, vdd_uv, vdd_reg,

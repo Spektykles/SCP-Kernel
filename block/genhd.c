@@ -1567,19 +1567,31 @@ void set_device_ro(struct block_device *bdev, int flag)
 
 EXPORT_SYMBOL(set_device_ro);
 
+bool get_user_ro(struct gendisk *disk, unsigned int partno)
+{
+	/* Is the user read-only bit set for the whole disk device? */
+	if (test_bit(0, disk->user_ro_bitmap))
+		return true;
+
+	/* Is the user read-only bit set for this particular partition? */
+	if (test_bit(partno, disk->user_ro_bitmap))
+		return true;
+
+	return false;
+}
+EXPORT_SYMBOL(get_user_ro);
+
 void set_disk_ro(struct gendisk *disk, int flag)
 {
 	struct disk_part_iter piter;
 	struct hd_struct *part;
 
-	if (disk->part0.policy != flag) {
+	if (disk->part0.policy != flag)
 		set_disk_ro_uevent(disk, flag);
-		disk->part0.policy = flag;
-	}
 
-	disk_part_iter_init(&piter, disk, DISK_PITER_INCL_EMPTY);
+	disk_part_iter_init(&piter, disk, DISK_PITER_INCL_EMPTY_PART0);
 	while ((part = disk_part_iter_next(&piter)))
-		part->policy = flag;
+		part->policy = get_user_ro(disk, part->partno) ?: flag;
 	disk_part_iter_exit(&piter);
 }
 

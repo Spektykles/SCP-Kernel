@@ -201,6 +201,7 @@ struct gendisk {
 	 */
 	struct disk_part_tbl __rcu *part_tbl;
 	struct hd_struct part0;
+	DECLARE_BITMAP(user_ro_bitmap, DISK_MAX_PARTS);
 
 	const struct block_device_operations *fops;
 	struct request_queue *queue;
@@ -440,6 +441,7 @@ extern struct block_device *bdget_disk(struct gendisk *disk, int partno);
 
 extern void set_device_ro(struct block_device *bdev, int flag);
 extern void set_disk_ro(struct gendisk *disk, int flag);
+extern bool get_user_ro(struct gendisk *disk, unsigned int partno);
 
 static inline int get_disk_ro(struct gendisk *disk)
 {

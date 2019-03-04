@@ -67,6 +67,14 @@ static const struct dmi_system_id dsdt_dmi_table[] __initconst = {
 		DMI_MATCH(DMI_PRODUCT_NAME, "Satellite"),
 		},
 	},
+	{
+	 .callback = set_copy_dsdt,
+	 .ident = "TOSHIBA Satellite LX0W-C",
+	 .matches = {
+		DMI_MATCH(DMI_SYS_VENDOR, "TOSHIBA"),
+		DMI_MATCH(DMI_PRODUCT_NAME, "Satellite LX0W-C"),
+		},
+	},
 	{}
 };
 #endif

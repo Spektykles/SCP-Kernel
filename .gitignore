@@ -119,6 +119,7 @@ GTAGS
 ID
 
 *.orig
+*.rej
 *~
 \#*#
 
@@ -141,3 +142,10 @@ x509.genkey
 
 # Kdevelop4
 *.kdev4
+
+# GitEyE
+.project
+
+# Kernel config
+.config
+

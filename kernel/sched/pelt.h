@@ -158,11 +158,6 @@ update_dl_rq_load_avg(u64 now, struct rq *rq, int running)
 	return 0;
 }
 
-static inline int
-update_irq_load_avg(struct rq *rq, u64 running)
-{
-	return 0;
-}
 
 static inline u64 rq_clock_pelt(struct rq *rq)
 {

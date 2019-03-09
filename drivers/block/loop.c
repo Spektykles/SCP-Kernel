@@ -1092,6 +1092,15 @@ loop_init_xfer(struct loop_device *lo, struct loop_func_table *xfer,
 	return err;
 }
 
+static void loop_disable_partscan(struct loop_device *lo)
+{
+	mutex_lock(&loop_ctl_mutex);
+	lo->lo_flags = 0;
+	if (!part_shift)
+		lo->lo_disk->flags |= GENHD_FL_NO_PART_SCAN;
+	mutex_unlock(&loop_ctl_mutex);
+}
+
 static int __loop_clr_fd(struct loop_device *lo, bool release)
 {
 	struct file *filp = NULL;
@@ -1186,11 +1195,10 @@ out_unlock:
 	 * device.
 	 */
 	mutex_lock(&loop_ctl_mutex);
-	lo->lo_flags = 0;
-	if (!part_shift)
-		lo->lo_disk->flags |= GENHD_FL_NO_PART_SCAN;
 	lo->lo_state = Lo_unbound;
 	mutex_unlock(&loop_ctl_mutex);
+
+	loop_disable_partscan(lo);
 
 	/*
 	 * Need not hold loop_ctl_mutex to fput backing file.

@@ -16,6 +16,7 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/backing-dev.h>
+#include <linux/blk-cgroup.h>
 #include "internal.h"
 
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
@@ -76,8 +77,13 @@ static void sync_inodes_one_sb(struct super_block *sb, void *arg)
 
 static void sync_fs_one_sb(struct super_block *sb, void *arg)
 {
-	if (!sb_rdonly(sb) && sb->s_op->sync_fs)
+	struct backing_dev_info *bdi = sb->s_bdi;
+
+	if (!sb_rdonly(sb) && sb->s_op->sync_fs) {
+		blkcg_start_wb_wait_on_bdi(bdi);
 		sb->s_op->sync_fs(sb, *(int *)arg);
+		blkcg_stop_wb_wait_on_bdi(bdi);
+	}
 }
 
 static void fdatawrite_one_bdev(struct block_device *bdev, void *arg)

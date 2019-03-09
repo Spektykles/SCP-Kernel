@@ -1319,6 +1319,136 @@ struct cgroup_subsys io_cgrp_subsys = {
 };
 EXPORT_SYMBOL_GPL(io_cgrp_subsys);
 
+#ifdef CONFIG_CGROUP_WRITEBACK
+struct blkcg_wb_sleeper {
+	struct blkcg *blkcg;
+	refcount_t refcnt;
+	struct list_head node;
+};
+
+static struct blkcg_wb_sleeper *
+blkcg_wb_sleeper_find(struct blkcg *blkcg, struct backing_dev_info *bdi)
+{
+	struct blkcg_wb_sleeper *bws;
+
+	list_for_each_entry(bws, &bdi->cgwb_waiters, node)
+		if (bws->blkcg == blkcg)
+			return bws;
+	return NULL;
+}
+
+static void
+blkcg_wb_sleeper_add(struct backing_dev_info *bdi, struct blkcg_wb_sleeper *bws)
+{
+	list_add(&bws->node, &bdi->cgwb_waiters);
+}
+
+static void
+blkcg_wb_sleeper_del(struct backing_dev_info *bdi, struct blkcg_wb_sleeper *bws)
+{
+	list_del_init(&bws->node);
+}
+
+/**
+ * blkcg_wb_waiters_on_bdi - check for writeback waiters on a block device
+ * @blkcg: current blkcg cgroup
+ * @bdi: block device to check
+ *
+ * Return true if any other blkcg different than the current one is waiting for
+ * writeback on the target block device, false otherwise.
+ */
+bool blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi)
+{
+	struct blkcg_wb_sleeper *bws;
+	bool ret = false;
+
+	if (likely(list_empty(&bdi->cgwb_waiters)))
+		return false;
+	spin_lock(&bdi->cgwb_waiters_lock);
+	list_for_each_entry(bws, &bdi->cgwb_waiters, node)
+		if (bws->blkcg != blkcg) {
+			ret = true;
+			break;
+		}
+	spin_unlock(&bdi->cgwb_waiters_lock);
+
+	return ret;
+}
+
+/**
+ * blkcg_start_wb_wait_on_bdi - add current blkcg to writeback waiters list
+ * @bdi: target block device
+ *
+ * Add current blkcg to the list of writeback waiters on target block device.
+ */
+void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi)
+{
+	struct blkcg_wb_sleeper *new_bws, *bws;
+	struct blkcg *blkcg;
+
+	new_bws = kzalloc(sizeof(*new_bws), GFP_KERNEL);
+	if (unlikely(!new_bws))
+		return;
+
+	rcu_read_lock();
+	blkcg = blkcg_from_current();
+	if (likely(blkcg)) {
+		/* Check if blkcg is already sleeping on bdi */
+		spin_lock_bh(&bdi->cgwb_waiters_lock);
+		bws = blkcg_wb_sleeper_find(blkcg, bdi);
+		if (bws) {
+			refcount_inc(&bws->refcnt);
+		} else {
+			/* Add current blkcg as a new wb sleeper on bdi */
+			css_get(&blkcg->css);
+			new_bws->blkcg = blkcg;
+			refcount_set(&new_bws->refcnt, 1);
+			blkcg_wb_sleeper_add(bdi, new_bws);
+			new_bws = NULL;
+		}
+		spin_unlock_bh(&bdi->cgwb_waiters_lock);
+	}
+	rcu_read_unlock();
+
+	kfree(new_bws);
+}
+
+/**
+ * blkcg_stop_wb_wait_on_bdi - remove current blkcg from writeback waiters list
+ * @bdi: target block device
+ *
+ * Remove current blkcg from the list of writeback waiters on target block
+ * device.
+ */
+void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi)
+{
+	struct blkcg_wb_sleeper *bws = NULL;
+	struct blkcg *blkcg;
+
+	rcu_read_lock();
+	blkcg = blkcg_from_current();
+	if (!blkcg) {
+		rcu_read_unlock();
+		return;
+	}
+	spin_lock_bh(&bdi->cgwb_waiters_lock);
+	bws = blkcg_wb_sleeper_find(blkcg, bdi);
+	if (unlikely(!bws)) {
+		/* blkcg_start/stop_wb_wait_on_bdi() mismatch */
+		WARN_ON(1);
+		goto out_unlock;
+	}
+	if (refcount_dec_and_test(&bws->refcnt)) {
+		blkcg_wb_sleeper_del(bdi, bws);
+		css_put(&blkcg->css);
+		kfree(bws);
+	}
+out_unlock:
+	spin_unlock_bh(&bdi->cgwb_waiters_lock);
+	rcu_read_unlock();
+}
+#endif
+
 /**
  * blkcg_activate_policy - activate a blkcg policy on a request_queue
  * @q: request_queue of interest

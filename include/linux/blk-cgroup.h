@@ -56,6 +56,7 @@ struct blkcg {
 
 	struct list_head		all_blkcgs_node;
 #ifdef CONFIG_CGROUP_WRITEBACK
+	struct list_head		cgwb_wait_node;
 	struct list_head		cgwb_list;
 	refcount_t			cgwb_refcnt;
 #endif
@@ -256,6 +257,12 @@ static inline struct cgroup_subsys_state *blkcg_css(void)
 static inline struct blkcg *css_to_blkcg(struct cgroup_subsys_state *css)
 {
 	return css ? container_of(css, struct blkcg, css) : NULL;
+}
+
+static inline struct blkcg *blkcg_from_current(void)
+{
+	WARN_ON_ONCE(!rcu_read_lock_held());
+	return css_to_blkcg(blkcg_css());
 }
 
 /**
@@ -460,6 +467,10 @@ static inline void blkcg_cgwb_put(struct blkcg *blkcg)
 		blkcg_destroy_blkgs(blkcg);
 }
 
+bool blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi);
+void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi);
+void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi);
+
 #else
 
 static inline void blkcg_cgwb_get(struct blkcg *blkcg) { }
@@ -469,6 +480,14 @@ static inline void blkcg_cgwb_put(struct blkcg *blkcg)
 	/* wb isn't being accounted, so trigger destruction right away */
 	blkcg_destroy_blkgs(blkcg);
 }
+
+static inline bool
+blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi)
+{
+	return false;
+}
+static inline void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
+static inline void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
 
 #endif
 
@@ -723,6 +742,7 @@ static inline void blkcg_bio_issue_init(struct bio *bio)
 static inline bool blkcg_bio_issue_check(struct request_queue *q,
 					 struct bio *bio)
 {
+	struct backing_dev_info *bdi = q->backing_dev_info;
 	struct blkcg_gq *blkg;
 	bool throtl = false;
 
@@ -738,6 +758,11 @@ static inline bool blkcg_bio_issue_check(struct request_queue *q,
 	}
 
 	blkg = bio->bi_blkg;
+
+	local_bh_disable();
+	if (blkcg_wb_waiters_on_bdi(blkg->blkcg, bdi))
+		bio_set_flag(bio, BIO_THROTTLED);
+	local_bh_enable();
 
 	throtl = blk_throtl_bio(q, blkg, bio);
 

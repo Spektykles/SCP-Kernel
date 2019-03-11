@@ -65,6 +65,7 @@ static const struct intel_lpss_platform_info spt_info = {
 
 static struct property_entry spt_i2c_properties[] = {
 	PROPERTY_ENTRY_U32("i2c-sda-hold-time-ns", 230),
+	PROPERTY_ENTRY_BOOL("linux,use-dynamic-adapter-nr"),
 	{ },
 };
 
@@ -100,6 +101,7 @@ static struct property_entry bxt_i2c_properties[] = {
 	PROPERTY_ENTRY_U32("i2c-sda-hold-time-ns", 42),
 	PROPERTY_ENTRY_U32("i2c-sda-falling-time-ns", 171),
 	PROPERTY_ENTRY_U32("i2c-scl-falling-time-ns", 208),
+	PROPERTY_ENTRY_BOOL("linux,use-dynamic-adapter-nr"),
 	{ },
 };
 
@@ -112,6 +114,7 @@ static struct property_entry apl_i2c_properties[] = {
 	PROPERTY_ENTRY_U32("i2c-sda-hold-time-ns", 207),
 	PROPERTY_ENTRY_U32("i2c-sda-falling-time-ns", 171),
 	PROPERTY_ENTRY_U32("i2c-scl-falling-time-ns", 208),
+	PROPERTY_ENTRY_BOOL("linux,use-dynamic-adapter-nr"),
 	{ },
 };
 

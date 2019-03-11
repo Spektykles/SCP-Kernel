@@ -29,6 +29,27 @@
 /* Max limits for throttle policy */
 #define THROTL_IOPS_MAX		UINT_MAX
 
+struct blkcg;
+
+#ifdef CONFIG_CGROUP_WRITEBACK
+
+bool blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi);
+void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi);
+void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi);
+
+#else /* CONFIG_CGROUP_WRITEBACK */
+
+static inline bool
+blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi)
+{
+	return false;
+}
+
+static inline void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
+static inline void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
+#endif /* CONFIG_CGROUP_WRITEBACK */
+
+
 #ifdef CONFIG_BLK_CGROUP
 
 enum blkg_rwstat_type {
@@ -467,10 +488,6 @@ static inline void blkcg_cgwb_put(struct blkcg *blkcg)
 		blkcg_destroy_blkgs(blkcg);
 }
 
-bool blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi);
-void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi);
-void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi);
-
 #else
 
 static inline void blkcg_cgwb_get(struct blkcg *blkcg) { }
@@ -480,15 +497,6 @@ static inline void blkcg_cgwb_put(struct blkcg *blkcg)
 	/* wb isn't being accounted, so trigger destruction right away */
 	blkcg_destroy_blkgs(blkcg);
 }
-
-static inline bool
-blkcg_wb_waiters_on_bdi(struct blkcg *blkcg, struct backing_dev_info *bdi)
-{
-	return false;
-}
-static inline void blkcg_start_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
-static inline void blkcg_stop_wb_wait_on_bdi(struct backing_dev_info *bdi) { }
-
 #endif
 
 /**

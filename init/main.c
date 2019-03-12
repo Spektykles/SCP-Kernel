@@ -806,63 +806,16 @@ static __initdata_or_module LIST_HEAD(blacklisted_initcalls);
 
 static int __init initcall_blacklist(char *str)
 {
-	char *str_entry;
-	struct blacklist_entry *entry;
-
-	/* str argument is a comma-separated list of functions */
-	do {
-		str_entry = strsep(&str, ",");
-		if (str_entry) {
-			pr_debug("blacklisting initcall %s\n", str_entry);
-			entry = memblock_alloc(sizeof(*entry),
-					       SMP_CACHE_BYTES);
-			if (!entry)
-				panic("%s: Failed to allocate %zu bytes\n",
-				      __func__, sizeof(*entry));
-			entry->buf = memblock_alloc(strlen(str_entry) + 1,
-						    SMP_CACHE_BYTES);
-			if (!entry->buf)
-				panic("%s: Failed to allocate %zu bytes\n",
-				      __func__, strlen(str_entry) + 1);
-			strcpy(entry->buf, str_entry);
-			list_add(&entry->next, &blacklisted_initcalls);
-		}
-	} while (str_entry);
-
 	return 0;
 }
 
 static bool __init_or_module initcall_blacklisted(initcall_t fn)
 {
-	struct blacklist_entry *entry;
-	char fn_name[KSYM_SYMBOL_LEN];
-	unsigned long addr;
-
-	if (list_empty(&blacklisted_initcalls))
-		return false;
-
-	addr = (unsigned long) dereference_function_descriptor(fn);
-	sprint_symbol_no_offset(fn_name, addr);
-
-	/*
-	 * fn will be "function_name [module_name]" where [module_name] is not
-	 * displayed for built-in init functions.  Strip off the [module_name].
-	 */
-	strreplace(fn_name, ' ', '\0');
-
-	list_for_each_entry(entry, &blacklisted_initcalls, next) {
-		if (!strcmp(fn_name, entry->buf)) {
-			pr_debug("initcall %s blacklisted\n", fn_name);
-			return true;
-		}
-	}
-
 	return false;
 }
 #else
 static int __init initcall_blacklist(char *str)
 {
-	pr_warn("initcall_blacklist requires CONFIG_KALLSYMS\n");
 	return 0;
 }
 

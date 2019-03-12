@@ -712,6 +712,8 @@ endif
 ifdef CONFIG_CC_OPTIMIZE_HARDER
 KBUILD_CFLAGS	+= -O3 $(call cc-disable-warning,maybe-uninitialized,)
 else
+KBUILD_CFLAGS   += -O2
+endif
 
 ifdef CONFIG_CC_DISABLE_WARN_MAYBE_UNINITIALIZED
 KBUILD_CFLAGS   += -Wno-maybe-uninitialized

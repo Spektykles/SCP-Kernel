@@ -678,7 +678,7 @@ $(KCONFIG_CONFIG):
 # This exploits the 'multi-target pattern rule' trick.
 # The syncconfig should be executed only once to make all the targets.
 %/auto.conf %/auto.conf.cmd %/tristate.conf: $(KCONFIG_CONFIG)
-	$(Q)$(MAKE) -f $(srctree)/Makefile syncconfig
+	$(Q)$(MAKE) $(build)=scripts/kconfig syncconfig
 else
 # External modules and some install targets need include/generated/autoconf.h
 # and include/config/auto.conf but do not care if they are up-to-date.

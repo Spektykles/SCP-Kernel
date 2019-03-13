@@ -322,13 +322,6 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	if (has_acpi_companion(&pdev->dev))
 		dw_i2c_acpi_configure(pdev);
 
-	if (has_acpi_companion(&pdev->dev) ||
-	    device_property_read_bool(&pdev->dev,
-				      "linux,use-dynamic-adapter-nr"))
-		dev->adapter.nr = -1;
-	else
-		dev->adapter.nr = pdev->id;
-
 	/*
 	 * Only standard mode at 100kHz, fast mode at 400kHz,
 	 * fast mode plus at 1MHz and high speed mode at 3.4MHz are supported.

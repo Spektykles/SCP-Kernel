@@ -130,3 +130,50 @@ struct platform_device *acpi_create_platform_device(struct acpi_device *adev,
 	return pdev;
 }
 EXPORT_SYMBOL_GPL(acpi_create_platform_device);
+
+static int trim_stale_platform_device(struct device *dev, void *context)
+{
+	struct acpi_device *adev = ACPI_COMPANION(dev);
+	int ret;
+
+	/* Skip devices enumerated by parent */
+	if (!adev || adev->flags.enumeration_by_parent)
+		return 0;
+
+	/* Skip devices that are sharing ACPI companion except primary one */
+	if (acpi_get_first_physical_node(adev) != dev)
+		return 0;
+
+	/* Skip alive devices */
+	ret = acpi_bus_get_status(adev);
+	if (!ret)
+		return 0;
+
+	/*
+	 * We have to call acpi_unbind_one() explicitly to avoid asynchronous
+	 * call in device_platform_notify() against staled data.
+	 */
+	acpi_unbind_one(dev);
+	acpi_bus_trim(adev);
+
+	dev_dbg(&adev->dev, "trimming platform device %s\n", dev_name(dev));
+	platform_device_unregister(to_platform_device(dev));
+	return 0;
+}
+
+/**
+ * acpi_trim_stale_platform_devices - remove platform devices that are gone
+ * @pdev: platform device to start walking the hierarchy from
+ *
+ * Iterate over platform devices that have ACPI companion and represent
+ * physical node and check if the device is gone. In such case unbind its
+ * ACPI companion and trim, then unregister physical device itself.
+ */
+int acpi_trim_stale_platform_devices(struct platform_device *pdev)
+{
+	struct device *dev = pdev ? &pdev->dev : NULL;
+	struct bus_type *bus = &platform_bus_type;
+
+	return bus_for_each_dev(bus, dev, NULL, trim_stale_platform_device);
+}
+EXPORT_SYMBOL_GPL(acpi_trim_stale_platform_devices);

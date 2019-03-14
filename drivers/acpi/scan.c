@@ -2290,6 +2290,10 @@ static void acpi_table_events_fn(struct work_struct *work)
 		acpi_scan_lock_acquire();
 		acpi_bus_scan(ACPI_ROOT_OBJECT);
 		acpi_scan_lock_release();
+	} else if (tew->event == ACPI_TABLE_EVENT_UNLOAD) {
+		acpi_scan_lock_acquire();
+		acpi_trim_stale_platform_devices(NULL);
+		acpi_scan_lock_release();
 	}
 
 	kfree(tew);
@@ -2300,9 +2304,6 @@ void acpi_scan_table_handler(u32 event, void *table, void *context)
 	struct acpi_table_events_work *tew;
 
 	if (!acpi_scan_initialized)
-		return;
-
-	if (event != ACPI_TABLE_EVENT_LOAD)
 		return;
 
 	tew = kmalloc(sizeof(*tew), GFP_KERNEL);

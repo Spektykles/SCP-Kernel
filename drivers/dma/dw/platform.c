@@ -104,7 +104,7 @@ dw_dma_parse_dt(struct platform_device *pdev)
 	u32 nr_channels;
 
 	if (!np) {
-		dev_err(&pdev->dev, "Missing DT data\n");
+		dev_info(&pdev->dev, "DT data is empty\n");
 		return NULL;
 	}
 

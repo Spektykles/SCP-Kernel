@@ -589,6 +589,20 @@ static const struct ts_dmi_data trekstor_surftab_wintron70_data = {
 	.properties	= trekstor_surftab_wintron70_props,
 };
 
+static const struct property_entry insyde_i107_type2_props[] = {
+	PROPERTY_ENTRY_U32("touchscreen-size-x", 1728),
+	PROPERTY_ENTRY_U32("touchscreen-size-y", 1148),
+	PROPERTY_ENTRY_BOOL("touchscreen-swapped-x-y"),
+	PROPERTY_ENTRY_STRING("firmware-name", "gsl1680-insyde-i107-type2.fw"),
+	PROPERTY_ENTRY_U32("silead,max-fingers", 10),
+	{ }
+};
+
+static const struct ts_dmi_data insyde_i107_type2_data = {
+	.acpi_name	= "MSSL1680:00",
+	.properties	= insyde_i107_type2_props,
+};
+
 /* NOTE: Please keep this table sorted alphabetically */
 static const struct dmi_system_id touchscreen_dmi_table[] = {
 	{
@@ -959,6 +973,15 @@ static const struct dmi_system_id touchscreen_dmi_table[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "YOURS"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "Y8W81"),
+		},
+	},
+	{
+		/* Insyde i107/Type2 */
+		.driver_data = (void *)&insyde_i107_type2_data,
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "Insyde"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "i107"),
+			DMI_MATCH(DMI_BIOS_VERSION, "CQ.G.WI107.HKBMRAA01"),
 		},
 	},
 	{ },

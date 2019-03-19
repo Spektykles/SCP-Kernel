@@ -125,9 +125,8 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 	handler_desc = region_obj->region.handler;
 	if (!handler_desc) {
 		ACPI_ERROR((AE_INFO,
-			    "No handler for Region [%4.4s] (%p) [%s]",
+			    "No handler for Region [%4.4s] [%s]",
 			    acpi_ut_get_node_name(region_obj->region.node),
-			    region_obj,
 			    acpi_ut_get_region_name(region_obj->region.
 						    space_id)));
 
@@ -150,8 +149,7 @@ acpi_ev_address_space_dispatch(union acpi_operand_object *region_obj,
 			/* No initialization routine, exit with error */
 
 			ACPI_ERROR((AE_INFO,
-				    "No init routine for region(%p) [%s]",
-				    region_obj,
+				    "No init routine for region [%s]",
 				    acpi_ut_get_region_name(region_obj->region.
 							    space_id)));
 			return_ACPI_STATUS(AE_NOT_EXIST);
@@ -439,8 +437,8 @@ acpi_ev_detach_region(union acpi_operand_object *region_obj,
 
 		if (obj_desc == start_desc) {
 			ACPI_ERROR((AE_INFO,
-				    "Circular handler list in region object %p",
-				    region_obj));
+				    "Circular handler list in region [%s]",
+				    acpi_ut_get_region_name(region_obj->region.space_id)));
 			return_VOID;
 		}
 	}

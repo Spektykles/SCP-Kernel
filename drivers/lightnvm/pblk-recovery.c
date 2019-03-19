@@ -894,10 +894,12 @@ int pblk_recov_pad(struct pblk *pblk)
 	left_msecs = line->left_msecs;
 	spin_unlock(&l_mg->free_lock);
 
-	ret = pblk_recov_pad_line(pblk, line, left_msecs);
-	if (ret) {
-		pblk_err(pblk, "tear down padding failed (%d)\n", ret);
-		return ret;
+	if (left_msecs) {
+		ret = pblk_recov_pad_line(pblk, line, left_msecs);
+		if (ret) {
+			pblk_err(pblk, "tear down padding failed (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	pblk_line_close_meta(pblk, line);

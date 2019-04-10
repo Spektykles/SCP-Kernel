@@ -1057,13 +1057,12 @@ static inline void bfq_pid_to_str(int pid, char *str, int len)
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
 struct bfq_group *bfqq_group(struct bfq_queue *bfqq);
 
-#define bfq_log_bfqq(bfqd, bfqq, fmt, args...)	do {			\
+#define bfq_log_bfqq(bfqd, bfqq, fmt, args...) do {	\
 	char pid_str[MAX_PID_STR_LENGTH];	\
 	bfq_pid_to_str((bfqq)->pid, pid_str, MAX_PID_STR_LENGTH);	\
-	blk_add_cgroup_trace_msg((bfqd)->queue,				\
-			bfqg_to_blkg(bfqq_group(bfqq))->blkcg,		\
-			"bfq%s%c " fmt, pid_str,			\
-			bfq_bfqq_sync((bfqq)) ? 'S' : 'A', ##args);	\
+	blk_add_trace_msg((bfqd)->queue, "bfq%s%c " fmt, pid_str,	\
+			bfq_bfqq_sync((bfqq)) ? 'S' : 'A',		\
+				##args);	\
 } while (0)
 
 #define bfq_log_bfqg(bfqd, bfqg, fmt, args...)	do {			\

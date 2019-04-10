@@ -2116,11 +2116,24 @@ static void intel_pstate_adjust_policy_max(struct cpufreq_policy *policy,
 
 static int intel_pstate_verify_policy(struct cpufreq_policy *policy)
 {
+	int max_freq;
 	struct cpudata *cpu = all_cpu_data[policy->cpu];
 
 	update_turbo_state();
+	max_freq = intel_pstate_get_max_freq(cpu);
+
+	if (acpi_ppc && policy->max == policy->cpuinfo.max_freq &&
+	    max_freq != policy->cpuinfo.max_freq) {
+		/*
+		 * System was not running under any constraints, but the
+		 * current max possible frequency is changed. So reset
+		 * policy limits.
+		 */
+		policy->cpuinfo.max_freq = policy->max = max_freq;
+	}
+
 	cpufreq_verify_within_limits(policy, policy->cpuinfo.min_freq,
-				     intel_pstate_get_max_freq(cpu));
+				     max_freq);
 
 	if (policy->policy != CPUFREQ_POLICY_POWERSAVE &&
 	    policy->policy != CPUFREQ_POLICY_PERFORMANCE)

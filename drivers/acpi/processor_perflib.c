@@ -50,6 +50,10 @@ module_param(ignore_ppc, int, 0644);
 MODULE_PARM_DESC(ignore_ppc, "If the frequency of your machine gets wrongly" \
 		 "limited by BIOS, this should help");
 
+static int broadcast_ppc;
+module_param(broadcast_ppc, int, 0644);
+MODULE_PARM_DESC(broadcast_ppc, "Broadcast the ppc to all online CPUs");
+
 #define PPC_REGISTERED   1
 #define PPC_IN_USE       2
 
@@ -167,8 +171,16 @@ void acpi_processor_ppc_has_changed(struct acpi_processor *pr, int event_flag)
 		else
 			acpi_processor_ppc_ost(pr->handle, 0);
 	}
-	if (ret >= 0)
-		cpufreq_update_limits(pr->id);
+	if (ret >= 0) {
+		if (broadcast_ppc) {
+			int cpu;
+
+			for_each_possible_cpu(cpu)
+				cpufreq_update_policy(cpu);
+		} else {
+			cpufreq_update_limits(pr->id);
+		}
+	}
 }
 
 int acpi_processor_get_bios_limit(int cpu, unsigned int *limit)

@@ -38,47 +38,11 @@ struct cht_mc_private {
 	int quirks;
 };
 
-static int platform_clock_control(struct snd_soc_dapm_widget *w,
-					  struct snd_kcontrol *k, int  event)
-{
-	struct snd_soc_dapm_context *dapm = w->dapm;
-	struct snd_soc_card *card = dapm->card;
-	struct snd_soc_dai *codec_dai;
-	struct cht_mc_private *ctx = snd_soc_card_get_drvdata(card);
-	int ret;
-
-	/* See the comment in snd_cht_mc_probe() */
-	if (ctx->quirks & QUIRK_PMC_PLT_CLK_0)
-		return 0;
-
-	codec_dai = snd_soc_card_get_codec_dai(card, CHT_CODEC_DAI);
-	if (!codec_dai) {
-		dev_err(card->dev, "Codec dai not found; Unable to set platform clock\n");
-		return -EIO;
-	}
-
-	if (SND_SOC_DAPM_EVENT_ON(event)) {
-		ret = clk_prepare_enable(ctx->mclk);
-		if (ret < 0) {
-			dev_err(card->dev,
-				"could not configure MCLK state");
-			return ret;
-		}
-	} else {
-		clk_disable_unprepare(ctx->mclk);
-	}
-
-	return 0;
-}
-
 static const struct snd_soc_dapm_widget cht_dapm_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone", NULL),
 	SND_SOC_DAPM_MIC("Headset Mic", NULL),
 	SND_SOC_DAPM_MIC("Int Mic", NULL),
 	SND_SOC_DAPM_SPK("Ext Spk", NULL),
-	SND_SOC_DAPM_SUPPLY("Platform Clock", SND_SOC_NOPM, 0, 0,
-			    platform_clock_control, SND_SOC_DAPM_PRE_PMU |
-			    SND_SOC_DAPM_POST_PMD),
 };
 
 static const struct snd_soc_dapm_route cht_audio_map[] = {
@@ -95,10 +59,6 @@ static const struct snd_soc_dapm_route cht_audio_map[] = {
 	{"codec_in0", NULL, "ssp2 Rx" },
 	{"codec_in1", NULL, "ssp2 Rx" },
 	{"ssp2 Rx", NULL, "HiFi Capture"},
-	{"Headphone", NULL, "Platform Clock"},
-	{"Headset Mic", NULL, "Platform Clock"},
-	{"Int Mic", NULL, "Platform Clock"},
-	{"Ext Spk", NULL, "Platform Clock"},
 };
 
 static const struct snd_kcontrol_new cht_mc_controls[] = {
@@ -223,25 +183,6 @@ static int cht_codec_init(struct snd_soc_pcm_runtime *runtime)
 	/* See the comment in snd_cht_mc_probe() */
 	if (ctx->quirks & QUIRK_PMC_PLT_CLK_0)
 		return 0;
-
-	/*
-	 * The firmware might enable the clock at
-	 * boot (this information may or may not
-	 * be reflected in the enable clock register).
-	 * To change the rate we must disable the clock
-	 * first to cover these cases. Due to common
-	 * clock framework restrictions that do not allow
-	 * to disable a clock that has not been enabled,
-	 * we need to enable the clock first.
-	 */
-	ret = clk_prepare_enable(ctx->mclk);
-	if (!ret)
-		clk_disable_unprepare(ctx->mclk);
-
-	ret = clk_set_rate(ctx->mclk, CHT_PLAT_CLK_3_HZ);
-
-	if (ret)
-		dev_err(runtime->dev, "unable to set MCLK rate\n");
 
 	return ret;
 }
@@ -494,6 +435,16 @@ static int snd_cht_mc_probe(struct platform_device *pdev)
 		}
 	}
 
+	/*
+	 * The MAX98090 does not seem to like it if we muck with its clock,
+	 * so we enable it here once and leave it at that.
+	 */
+	ret_val = clk_prepare_enable(drv->mclk);
+	if (ret_val < 0) {
+		dev_err(&pdev->dev, "Failed to enable MCLK: %d\n", ret_val);
+		return ret_val;
+	}
+
 	ret_val = devm_snd_soc_register_card(&pdev->dev, &snd_soc_card_cht);
 	if (ret_val) {
 		dev_err(&pdev->dev,
@@ -520,7 +471,6 @@ static struct platform_driver snd_cht_mc_driver = {
 		.name = "cht-bsw-max98090",
 	},
 	.probe = snd_cht_mc_probe,
-	.remove = snd_cht_mc_remove,
 };
 
 module_platform_driver(snd_cht_mc_driver)

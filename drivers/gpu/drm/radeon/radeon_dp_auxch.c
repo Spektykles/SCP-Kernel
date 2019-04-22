@@ -168,8 +168,10 @@ radeon_dp_aux_transfer_native(struct drm_dp_aux *aux, struct drm_dp_aux_msg *msg
 		goto done;
 	}
 	if (tmp & AUX_RX_ERROR_FLAGS) {
-		DRM_DEBUG_KMS_RATELIMITED("dp_aux_ch flags not zero: %08x\n",
-					  tmp);
+		/*
+		 * aux transfers always fail with non-zero status flags when
+		 * there's nothing connected on the port
+		 */
 		ret = -EIO;
 		goto done;
 	}

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+config SECURITY_DKLM
+	bool "DKLM security module"
+	depends on SECURITY && NET
+	select AUDIT
+	select SECURITY_PATH
+	select SECURITYFS
+	select SECURITY_NETWORK
+	default n
+	help
+	  To compile this DKLM choose Y here: the module will be called dklm.
+
+	  If you want to use the DKLM security, then you must say Y here
+	  to include DKLM module. If unsure, say N.
+

@@ -896,6 +896,8 @@ static int __init test_firmware_init(void)
 		return rc;
 	}
 
++	ssleep(10);
+
 	pr_warn("interface ready\n");
 
 	return 0;

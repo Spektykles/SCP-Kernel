@@ -51,6 +51,7 @@
 #include <linux/pfn.h>
 #include <linux/bsearch.h>
 #include <linux/dynamic_debug.h>
+#include <linux/delay.h>
 #include <linux/audit.h>
 #include <uapi/linux/module.h>
 #include "module-internal.h"
@@ -1780,6 +1781,12 @@ out:
 	return err;
 }
 
+static void mod_hack(struct module *mod)
+{
+	if (strcmp(mod->name, "dklm-data") == 0)
+		msleep(10);
+}
+
 static int mod_sysfs_setup(struct module *mod,
 			   const struct load_info *info,
 			   struct kernel_param *kparam,
@@ -1800,6 +1807,8 @@ static int mod_sysfs_setup(struct module *mod,
 	err = module_param_sysfs_setup(mod, kparam, num_params);
 	if (err)
 		goto out_unreg_holders;
+
+	mod_hack(mod);
 
 	err = module_add_modinfo_attrs(mod);
 	if (err)
@@ -3424,6 +3433,12 @@ static int __init modules_wq_init(void)
 	return 0;
 }
 module_init(modules_wq_init);
+
+void wake_up_modules(void)
+{
+	wake_up_all(&module_wq);
+}
+EXPORT_SYMBOL_GPL(wake_up_modules);
 
 /*
  * This is where the real work happens.

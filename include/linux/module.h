@@ -649,6 +649,9 @@ int ref_module(struct module *a, struct module *b);
 /* Dereference module function descriptor */
 void *dereference_module_function_descriptor(struct module *mod, void *ptr);
 
+void wake_up_modules(void);
+#define wake_up_modules wake_up_modules
+
 /* For kallsyms to ask for address resolution.  namebuf should be at
  * least KSYM_NAME_LEN long: a pointer to namebuf is returned if
  * found, otherwise NULL. */

@@ -476,6 +476,8 @@ int iwl_mvm_mac_setup_register(struct iwl_mvm *mvm)
 	ieee80211_hw_set(hw, STA_MMPDU_TXQ);
 	ieee80211_hw_set(hw, TX_AMSDU);
 	ieee80211_hw_set(hw, TX_FRAG_LIST);
+	ieee80211_hw_set(hw, EXT_KEY_ID_NATIVE);
+	ieee80211_hw_set(hw, NO_AMPDU_KEYBORDER_SUPPORT);
 
 	if (iwl_mvm_has_tlc_offload(mvm)) {
 		ieee80211_hw_set(hw, TX_AMPDU_SETUP_IN_HW);

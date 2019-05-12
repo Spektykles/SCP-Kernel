@@ -124,6 +124,8 @@ mt76_edcca_set(void *data, u64 val)
 
 	mutex_lock(&dev->mt76.mutex);
 
+	mutex_lock(&dev->mt76.mutex);
+
 	dev->ed_monitor_enabled = !!val;
 	dev->ed_monitor = dev->ed_monitor_enabled &&
 			  region == NL80211_DFS_ETSI;

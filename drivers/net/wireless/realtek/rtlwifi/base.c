@@ -531,8 +531,14 @@ int rtl_init_core(struct ieee80211_hw *hw)
 	/* <2> rate control register */
 	hw->rate_control_algorithm = "rtl_rc";
 
+	/* <3> init list */
+	INIT_LIST_HEAD(&rtlpriv->entry_list);
+	INIT_LIST_HEAD(&rtlpriv->scan_list.list);
+	skb_queue_head_init(&rtlpriv->tx_report.queue);
+	skb_queue_head_init(&rtlpriv->c2hcmd_queue);
+
 	/*
-	 * <3> init CRDA must come after init
+	 * <4> init CRDA must come after init
 	 * mac80211 hw  in _rtl_init_mac80211.
 	 */
 	if (rtl_regd_init(hw, rtl_reg_notifier)) {
@@ -540,7 +546,7 @@ int rtl_init_core(struct ieee80211_hw *hw)
 		return 1;
 	}
 
-	/* <4> locks */
+	/* <5> locks */
 	mutex_init(&rtlpriv->locks.conf_mutex);
 	mutex_init(&rtlpriv->locks.ips_mutex);
 	mutex_init(&rtlpriv->locks.lps_mutex);
@@ -555,11 +561,6 @@ int rtl_init_core(struct ieee80211_hw *hw)
 	spin_lock_init(&rtlpriv->locks.cck_and_rw_pagea_lock);
 	spin_lock_init(&rtlpriv->locks.fw_ps_lock);
 	spin_lock_init(&rtlpriv->locks.iqk_lock);
-	/* <5> init list */
-	INIT_LIST_HEAD(&rtlpriv->entry_list);
-	INIT_LIST_HEAD(&rtlpriv->scan_list.list);
-	skb_queue_head_init(&rtlpriv->tx_report.queue);
-	skb_queue_head_init(&rtlpriv->c2hcmd_queue);
 
 	rtlmac->link_state = MAC80211_NOLINK;
 

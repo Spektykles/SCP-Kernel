@@ -2205,6 +2205,60 @@ fail:
 	return -ENOMEM;
 }
 
+static int blk_mq_hctx_notify_prepare(unsigned int cpu, struct hlist_node *node)
+{
+	struct blk_mq_hw_ctx	*hctx;
+	struct blk_mq_tags	*tags;
+
+	hctx = hlist_entry_safe(node, struct blk_mq_hw_ctx, cpuhp_dead);
+	tags = hctx->tags;
+
+	if (tags)
+		clear_bit(BLK_MQ_TAGS_DRAINED, &tags->flags);
+
+	return 0;
+}
+
+static bool blk_mq_count_inflight_rq(struct request *rq, void *data,
+				     bool reserved)
+{
+	if (blk_mq_rq_state(rq) == MQ_RQ_IN_FLIGHT)
+		(*(unsigned long *)data)++;
+
+	return true;
+}
+
+static unsigned blk_mq_tags_inflight_rqs(struct blk_mq_tags *tags)
+{
+	unsigned long cnt = 0;
+
+	blk_mq_all_tag_busy_iter(tags, blk_mq_count_inflight_rq, &cnt);
+
+	return cnt;
+}
+
+static void blk_mq_drain_inflight_rqs(struct blk_mq_tags *tags, int dead_cpu)
+{
+	unsigned long msecs_left = 1000 * 5;
+
+	if (!tags)
+		return;
+
+	if (test_and_set_bit(BLK_MQ_TAGS_DRAINED, &tags->flags))
+		return;
+
+	while (msecs_left > 0) {
+		if (!blk_mq_tags_inflight_rqs(tags))
+			break;
+		msleep(5);
+		msecs_left -= 5;
+	}
+
+	if (msecs_left > 0)
+		printk(KERN_WARNING "requests not completed from dead "
+				"CPU %d\n", dead_cpu);
+}
+
 /*
  * 'cpu' is going away. splice any existing rq_list entries from this
  * software queue to the hw queue dispatch list, and ensure that it
@@ -2236,6 +2290,14 @@ static int blk_mq_hctx_notify_dead(unsigned int cpu, struct hlist_node *node)
 	spin_unlock(&hctx->lock);
 
 	blk_mq_run_hw_queue(hctx, true);
+
+	/*
+	 * Interrupt for this queue will be shutdown, so wait until all
+	 * requests from this hw queue is done or timeout.
+	 */
+	if (cpumask_first_and(hctx->cpumask, cpu_online_mask) >= nr_cpu_ids)
+		blk_mq_drain_inflight_rqs(hctx->tags, cpu);
+
 	return 0;
 }
 
@@ -3534,7 +3596,8 @@ EXPORT_SYMBOL(blk_mq_rq_cpu);
 
 static int __init blk_mq_init(void)
 {
-	cpuhp_setup_state_multi(CPUHP_BLK_MQ_DEAD, "block/mq:dead", NULL,
+	cpuhp_setup_state_multi(CPUHP_BLK_MQ_DEAD, "block/mq:dead",
+				blk_mq_hctx_notify_prepare,
 				blk_mq_hctx_notify_dead);
 	return 0;
 }

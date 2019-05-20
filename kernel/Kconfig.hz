@@ -5,8 +5,8 @@
 
 choice
 	prompt "Timer frequency"
-	default HZ_750 if SCHED_PDS
-	default HZ_250_NODEF if !SCHED_PDS
+	default HZ_750 if SCHED_BMQ
+	default HZ_250_NODEF if !SCHED_BMQ
 
 	help
 	 Allows the configuration of the timer frequency. It is customary
@@ -35,7 +35,7 @@ choice
 	 or multimedia, selected 300Hz instead.
 
 	 250 Hz is the default choice for the mainline scheduler but not
-	 advantageous in combination with PDS.
+	 advantageous in combination with BMQ.
 
 	config HZ_300_NODEF
 		bool "300 HZ"
@@ -45,7 +45,7 @@ choice
 	 on SMP and NUMA systems and exactly dividing by both PAL and
 	 NTSC frame rates for video and multimedia work.
 
-	config HZ_500
+	config HZ_500_NODEF
 		bool "500 HZ"
 	help
 	 500 Hz is a balanced timer frequency. Provides fast interactivity

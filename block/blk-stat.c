@@ -48,7 +48,7 @@ void blk_rq_stat_add(struct blk_rq_stat *stat, u64 value)
 	stat->nr_samples++;
 }
 
-void blk_stat_add(struct request *rq, u64 now)
+void blk_stat_add(struct request *rq)
 {
 	struct request_queue *q = rq->q;
 	struct blk_stat_callback *cb;
@@ -56,7 +56,7 @@ void blk_stat_add(struct request *rq, u64 now)
 	int bucket;
 	u64 value;
 
-	value = (now >= rq->io_start_time_ns) ? now - rq->io_start_time_ns : 0;
+	value = blk_rq_io_time(rq);
 
 	blk_throtl_stat_add(rq, value);
 

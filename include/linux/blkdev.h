@@ -198,6 +198,9 @@ struct request {
 	u64 start_time_ns;
 	/* Time that I/O was submitted to the device. */
 	u64 io_start_time_ns;
+	/* Time that I/O was reported completed by the device. */
+	u64 io_end_time_ns;
+
 
 #ifdef CONFIG_BLK_WBT
 	unsigned short wbt_flags;
@@ -389,6 +392,14 @@ static inline int blkdev_reset_zones_ioctl(struct block_device *bdev,
 }
 
 #endif /* CONFIG_BLK_DEV_ZONED */
+
+static inline u64 blk_rq_io_time(struct request *rq)
+{
+	u64 start = rq->io_start_time_ns;
+	u64 end = rq->io_end_time_ns;
+
+	return (end - start) ? end - start : 0;
+}
 
 struct request_queue {
 	/*

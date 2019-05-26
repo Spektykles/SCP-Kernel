@@ -330,6 +330,7 @@ static struct request *blk_mq_rq_ctx_init(struct blk_mq_alloc_data *data,
 	else
 		rq->start_time_ns = 0;
 	rq->io_start_time_ns = 0;
+	rq->io_end_time_ns = 0;
 	rq->nr_phys_segments = 0;
 #if defined(CONFIG_BLK_DEV_INTEGRITY)
 	rq->nr_integrity_segments = 0;
@@ -528,14 +529,17 @@ EXPORT_SYMBOL_GPL(blk_mq_free_request);
 
 inline void __blk_mq_end_request(struct request *rq, blk_status_t error)
 {
-	u64 now = 0;
+	u64 now = rq->io_end_time_ns;
 
-	if (blk_mq_need_time_stamp(rq))
+	/* called directly bypassing __blk_mq_complete_request */
+	if (blk_mq_need_time_stamp(rq) && !now) {
 		now = ktime_get_ns();
+		rq->io_end_time_ns = now;
+	}
 
 	if (rq->rq_flags & RQF_STATS) {
 		blk_mq_poll_stats_start(rq->q);
-		blk_stat_add(rq, now);
+		blk_stat_add(rq);
 	}
 
 	if (rq->internal_tag != -1)
@@ -574,6 +578,9 @@ static void __blk_mq_complete_request(struct request *rq)
 	struct request_queue *q = rq->q;
 	bool shared = false;
 	int cpu;
+
+	if (blk_mq_need_time_stamp(rq))
+		rq->io_end_time_ns = ktime_get_ns();
 
 	WRITE_ONCE(rq->state, MQ_RQ_COMPLETE);
 	/*

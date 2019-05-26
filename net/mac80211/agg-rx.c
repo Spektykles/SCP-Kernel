@@ -178,9 +178,57 @@ static void sta_rx_agg_reorder_timer_expired(struct timer_list *t)
 	rcu_read_unlock();
 }
 
+static void ieee80211_add_addbaext(struct ieee80211_sub_if_data *sdata,
+				   struct sk_buff *skb,
+				   struct ieee80211_addbaext *req)
+{
+	struct ieee80211_addbaext *resp;
+	struct ieee80211_supported_band *sband;
+	const struct ieee80211_sta_he_cap *he_cap;
+	u8 frag_level, cap_frag_level;
+
+	sband = ieee80211_get_sband(sdata);
+	he_cap = ieee80211_get_he_iftype_cap(sband, sdata->vif.type);
+	if (!he_cap)
+		return;
+
+	resp = skb_put_zero(skb, sizeof(struct ieee80211_addbaext));
+	resp->eid = IEEE80211_ADDBA_EXT_ELEM_ID;
+	resp->length = IEEE80211_ADDBA_EXT_ELEM_ID_LEN;
+	resp->data = req->data & IEEE80211_ADDBA_EXT_NO_FRAG;
+
+	frag_level = (req->data & IEEE80211_ADDBA_EXT_FRAG_LEVEL_MASK) >>
+		     IEEE80211_ADDBA_EXT_FRAG_LEVEL_SHIFT;
+	cap_frag_level = (he_cap->he_cap_elem.mac_cap_info[0] &
+			  IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_MASK) >>
+			 IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_SHIFT;
+	if (frag_level > cap_frag_level)
+		frag_level = cap_frag_level;
+	resp->data |= (frag_level << IEEE80211_ADDBA_EXT_FRAG_LEVEL_SHIFT) &
+		      IEEE80211_ADDBA_EXT_FRAG_LEVEL_MASK;
+}
+
+static struct ieee80211_addbaext *
+ieee80211_check_addbaext(struct ieee80211_mgmt *mgmt, int len)
+{
+	struct ieee80211_addbaext *addbaext = (struct ieee80211_addbaext *)
+					mgmt->u.action.u.addba_req.variable;
+	int sz = 24 + 1 + sizeof(mgmt->u.action.u.addba_resp);
+
+	if ((len - sz) < sizeof(struct ieee80211_addbaext))
+		return NULL;
+
+	if (addbaext->eid != IEEE80211_ADDBA_EXT_ELEM_ID ||
+	    addbaext->length != IEEE80211_ADDBA_EXT_ELEM_ID_LEN)
+		return NULL;
+
+	return addbaext;
+}
+
 static void ieee80211_send_addba_resp(struct ieee80211_sub_if_data *sdata, u8 *da, u16 tid,
 				      u8 dialog_token, u16 status, u16 policy,
-				      u16 buf_size, u16 timeout)
+				      u16 buf_size, u16 timeout,
+				      struct ieee80211_addbaext *addbaext)
 {
 	struct ieee80211_local *local = sdata->local;
 	struct sk_buff *skb;
@@ -188,7 +236,9 @@ static void ieee80211_send_addba_resp(struct ieee80211_sub_if_data *sdata, u8 *d
 	bool amsdu = ieee80211_hw_check(&local->hw, SUPPORTS_AMSDU_IN_AMPDU);
 	u16 capab;
 
-	skb = dev_alloc_skb(sizeof(*mgmt) + local->hw.extra_tx_headroom);
+	skb = dev_alloc_skb(sizeof(*mgmt) +
+		    (addbaext ? sizeof(struct ieee80211_addbaext) : 0) +
+		    local->hw.extra_tx_headroom);
 	if (!skb)
 		return;
 
@@ -222,13 +272,17 @@ static void ieee80211_send_addba_resp(struct ieee80211_sub_if_data *sdata, u8 *d
 	mgmt->u.action.u.addba_resp.timeout = cpu_to_le16(timeout);
 	mgmt->u.action.u.addba_resp.status = cpu_to_le16(status);
 
+	if (addbaext)
+		ieee80211_add_addbaext(sdata, skb, addbaext);
+
 	ieee80211_tx_skb(sdata, skb);
 }
 
 void ___ieee80211_start_rx_ba_session(struct sta_info *sta,
 				      u8 dialog_token, u16 timeout,
 				      u16 start_seq_num, u16 ba_policy, u16 tid,
-				      u16 buf_size, bool tx, bool auto_seq)
+				      u16 buf_size, bool tx, bool auto_seq,
+				      struct ieee80211_addbaext *addbaext)
 {
 	struct ieee80211_local *local = sta->sdata->local;
 	struct tid_ampdu_rx *tid_agg_rx;
@@ -412,19 +466,20 @@ end:
 	if (tx)
 		ieee80211_send_addba_resp(sta->sdata, sta->sta.addr, tid,
 					  dialog_token, status, 1, buf_size,
-					  timeout);
+					  timeout, addbaext);
 }
 
 static void __ieee80211_start_rx_ba_session(struct sta_info *sta,
 					    u8 dialog_token, u16 timeout,
 					    u16 start_seq_num, u16 ba_policy,
 					    u16 tid, u16 buf_size, bool tx,
-					    bool auto_seq)
+					    bool auto_seq,
+					    struct ieee80211_addbaext *addbaext)
 {
 	mutex_lock(&sta->ampdu_mlme.mtx);
 	___ieee80211_start_rx_ba_session(sta, dialog_token, timeout,
 					 start_seq_num, ba_policy, tid,
-					 buf_size, tx, auto_seq);
+					 buf_size, tx, auto_seq, addbaext);
 	mutex_unlock(&sta->ampdu_mlme.mtx);
 }
 
@@ -434,6 +489,7 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 				     size_t len)
 {
 	u16 capab, tid, timeout, ba_policy, buf_size, start_seq_num;
+	struct ieee80211_addbaext *addbaext = NULL;
 	u8 dialog_token;
 
 	/* extract session parameters from addba request frame */
@@ -447,9 +503,12 @@ void ieee80211_process_addba_request(struct ieee80211_local *local,
 	tid = (capab & IEEE80211_ADDBA_PARAM_TID_MASK) >> 2;
 	buf_size = (capab & IEEE80211_ADDBA_PARAM_BUF_SIZE_MASK) >> 6;
 
+	if (sta->sta.he_cap.has_he)
+		addbaext = ieee80211_check_addbaext(mgmt, len);
+
 	__ieee80211_start_rx_ba_session(sta, dialog_token, timeout,
 					start_seq_num, ba_policy, tid,
-					buf_size, true, false);
+					buf_size, true, false, addbaext);
 }
 
 void ieee80211_manage_rx_ba_offl(struct ieee80211_vif *vif,

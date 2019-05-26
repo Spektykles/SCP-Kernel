@@ -881,6 +881,18 @@ struct ieee80211_tpc_report_ie {
 	u8 link_margin;
 } __packed;
 
+#define IEEE80211_ADDBA_EXT_ELEM_ID		0x9f
+#define IEEE80211_ADDBA_EXT_ELEM_ID_LEN		0x01
+#define IEEE80211_ADDBA_EXT_FRAG_LEVEL_MASK	GENMASK(2, 1)
+#define IEEE80211_ADDBA_EXT_FRAG_LEVEL_SHIFT	1
+#define IEEE80211_ADDBA_EXT_NO_FRAG		BIT(0)
+
+struct ieee80211_addbaext {
+	u8 eid;
+	u8 length;
+	u8 data;
+} __packed;
+
 struct ieee80211_mgmt {
 	__le16 frame_control;
 	__le16 duration;
@@ -973,6 +985,8 @@ struct ieee80211_mgmt {
 					__le16 capab;
 					__le16 timeout;
 					__le16 start_seq_num;
+					/* followed by BA Extension */
+					u8 variable[0];
 				} __packed addba_req;
 				struct{
 					u8 action_code;
@@ -1719,6 +1733,7 @@ int ieee80211_get_vht_max_nss(struct ieee80211_vht_cap *cap,
 #define IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_LEVEL_2		0x10
 #define IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_LEVEL_3		0x18
 #define IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_MASK			0x18
+#define IEEE80211_HE_MAC_CAP0_DYNAMIC_FRAG_SHIFT		3
 #define IEEE80211_HE_MAC_CAP0_MAX_NUM_FRAG_MSDU_1		0x00
 #define IEEE80211_HE_MAC_CAP0_MAX_NUM_FRAG_MSDU_2		0x20
 #define IEEE80211_HE_MAC_CAP0_MAX_NUM_FRAG_MSDU_4		0x40

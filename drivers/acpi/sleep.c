@@ -850,11 +850,25 @@ static void lpi_device_get_constraints(void)
 
 free_acpi_buffer:
 	ACPI_FREE(out_obj);
+	/*
+	 * lpi_constraints_table_size only increments if we have proper package
+	 * definitions for the constraints, its done after parsing all the
+	 * fields for constraints. Memory is allocated for lpi_constraints_table
+	 * through kcalloc much before we start parsing the packages we need to
+	 * free the memory here in case of any failures.
+	 */
+	if (!lpi_constraints_table_size && lpi_constraints_table)
+		kfree(lpi_constraints_table);
 }
 
-static void lpi_check_constraints(void)
+static int lpi_check_constraints(void)
 {
 	int i;
+	int lpi_error = 0;
+
+	/* We do not have any table so return from here */
+	if (!lpi_constraints_table_size)
+		return lpi_error;
 
 	for (i = 0; i < lpi_constraints_table_size; ++i) {
 		acpi_handle handle = lpi_constraints_table[i].handle;
@@ -869,17 +883,21 @@ static void lpi_check_constraints(void)
 			acpi_power_state_string(adev->power.state));
 
 		if (!adev->flags.power_manageable) {
-			acpi_handle_info(handle, "LPI: Device not power manageable\n");
+			acpi_handle_debug(handle, "LPI: Device not power manageable\n");
 			lpi_constraints_table[i].handle = NULL;
 			continue;
 		}
 
-		if (adev->power.state < lpi_constraints_table[i].min_dstate)
-			acpi_handle_info(handle,
+		if (adev->power.state < lpi_constraints_table[i].min_dstate) {
+			acpi_handle_debug(handle,
 				"LPI: Constraint not met; min power state:%s current power state:%s\n",
 				acpi_power_state_string(lpi_constraints_table[i].min_dstate),
 				acpi_power_state_string(adev->power.state));
+			/* Error is set here if any of the constraints fail */
+			lpi_error = 1;
+		}
 	}
+	return lpi_error;
 }
 
 static void acpi_sleep_run_lps0_dsm(unsigned int func)
@@ -957,12 +975,8 @@ static int acpi_s2idle_begin(void)
 
 static int acpi_s2idle_prepare(void)
 {
-	if (lps0_device_handle) {
-		acpi_sleep_run_lps0_dsm(ACPI_LPS0_SCREEN_OFF);
-		acpi_sleep_run_lps0_dsm(ACPI_LPS0_ENTRY);
-
+	if (lps0_device_handle)
 		acpi_ec_set_gpe_wake_mask(ACPI_GPE_ENABLE);
-	}
 
 	if (acpi_sci_irq_valid())
 		enable_irq_wake(acpi_sci_irq);
@@ -979,9 +993,6 @@ static void acpi_s2idle_wake(void)
 {
 	if (!lps0_device_handle)
 		return;
-
-	if (pm_debug_messages_on)
-		lpi_check_constraints();
 
 	/*
 	 * If IRQD_WAKEUP_ARMED is not set for the SCI at this point, it means
@@ -1003,6 +1014,7 @@ static void acpi_s2idle_wake(void)
 
 static void acpi_s2idle_sync(void)
 {
+	int lpi_check;
 	/*
 	 * Process all pending events in case there are any wakeup ones.
 	 *
@@ -1013,6 +1025,46 @@ static void acpi_s2idle_sync(void)
 	acpi_ec_flush_work();
 	acpi_os_wait_events_complete();	/* synchronize Notify handling */
 	s2idle_wakeup = false;
+
+	if (!lps0_device_handle)
+		return;
+
+	acpi_sleep_run_lps0_dsm(ACPI_LPS0_SCREEN_OFF);
+
+	/*
+	 * Check here if device constraints(Function 1) is defined.
+	 * If only the sleep functions are defined in lpit we run that here.
+	 */
+	if (!lpi_constraints_table_size)
+		goto lps0_entry;
+
+	lpi_check = lpi_check_constraints();
+
+	/*
+	 * _DSM function may be invoked when the OS state
+	 * has reached sufficient criteria for processor idle
+	 * state.
+	 */
+	if (lpi_check) {
+		/*
+		 * We check the config LPIT_CONSTRAINTS_FAILURE
+		 * here for the devices which defines the constraints
+		 * properly and LPIT_CONSTRAINTS_FAILURE config in kernel.
+		 * We fail here if constraints are not met. But we still run
+		 * the sleep function for the devices which do not define
+		 * the LPIT_CONSTRAINTS_FAILURE kernel config.
+		 */
+		if (!IS_ENABLED(CONFIG_LPIT_CONSTRAINTS_CHECK_FAILURE))
+			goto lps0_entry;
+
+		return;
+	}
+
+lps0_entry:
+	/*
+	 * If only the sleep functions are defined in lpit we run that here.
+	 */
+	acpi_sleep_run_lps0_dsm(ACPI_LPS0_ENTRY);
 }
 
 static void acpi_s2idle_restore(void)

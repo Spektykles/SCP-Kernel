@@ -93,6 +93,19 @@ config ACPI_LPIT
 	depends on X86_64
 	default y
 
+config LPIT_CONSTRAINTS_CHECK_FAILURE
+	bool
+	depends on X86_64
+	default n
+	help
+	  For platforms defining the device constraints _DSM function in the
+	  Low Power Idle table this option allows the platform to choose
+	  if they wants to fail or succeed in calling the Low Power Entry
+	  Notification _DSM function. If this config is defined by a
+	  platform then the Low Power S0 Entry Notification _DSM function
+	  is not called if the idle state has not achieved the Entry Trigger
+	  defined in LPIT.
+
 config ACPI_SLEEP
 	bool
 	depends on SUSPEND || HIBERNATION

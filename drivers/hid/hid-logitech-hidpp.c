@@ -58,6 +58,7 @@ MODULE_PARM_DESC(disable_tap_to_click,
 #define HIDPP_QUIRK_CLASS_K400			BIT(2)
 #define HIDPP_QUIRK_CLASS_G920			BIT(3)
 #define HIDPP_QUIRK_CLASS_K750			BIT(4)
+#define HIDPP_QUIRK_CLASS_LIGHTSPEED		BIT(5)
 
 /* bits 2..20 are reserved for classes */
 /* #define HIDPP_QUIRK_CONNECT_EVENTS		BIT(21) disabled */
@@ -232,7 +233,11 @@ static int __hidpp_send_report(struct hid_device *hdev,
 	 * set the device_index as the receiver, it will be overwritten by
 	 * hid_hw_request if needed
 	 */
-	hidpp_report->device_index = 0xff;
+	if (hidpp->quirks & HIDPP_QUIRK_CLASS_LIGHTSPEED) {
+		hidpp_report->device_index = 0x01;
+	} else {
+		hidpp_report->device_index = 0xff;
+	}
 
 	if (hidpp->quirks & HIDPP_QUIRK_FORCE_OUTPUT_REPORTS) {
 		ret = hid_hw_output_report(hdev, (u8 *)hidpp_report, fields_count);
@@ -3755,6 +3760,9 @@ static const struct hid_device_id hidpp_devices[] = {
 	  HID_USB_DEVICE(USB_VENDOR_ID_LOGITECH, 0xC06B) },
 	{ /* Logitech G900 Gaming Mouse over USB */
 	  HID_USB_DEVICE(USB_VENDOR_ID_LOGITECH, 0xC081) },
+	{ /* Logitech Gaming Mice over Lightspeed Receiver */
+	  HID_USB_DEVICE(USB_VENDOR_ID_LOGITECH, 0xC539),
+	  .driver_data = HIDPP_QUIRK_CLASS_LIGHTSPEED },
 	{ /* Logitech G920 Wheel over USB */
 	  HID_USB_DEVICE(USB_VENDOR_ID_LOGITECH, USB_DEVICE_ID_LOGITECH_G920_WHEEL),
 		.driver_data = HIDPP_QUIRK_CLASS_G920 | HIDPP_QUIRK_FORCE_OUTPUT_REPORTS},

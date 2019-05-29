@@ -178,6 +178,13 @@ static struct dentry *zs_stat_root;
 static struct vfsmount *zsmalloc_mnt;
 #endif
 
+/* Enable/disable zs_malloc force allocate block with
+ *  gfp __GFP_HIGHMEM | __GFP_MOVABLE (disabled by default).
+ */
+static bool __read_mostly zs_malloc_force_movable;
+module_param_cb(malloc_force_movable, &param_ops_bool,
+		&zs_malloc_force_movable, 0644);
+
 /*
  * We assign a page to ZS_ALMOST_EMPTY fullness group when:
  *	n <= N / f, where
@@ -1462,6 +1469,9 @@ unsigned long zs_malloc(struct zs_pool *pool, size_t size, gfp_t gfp)
 
 	if (unlikely(!size || size > ZS_MAX_ALLOC_SIZE))
 		return 0;
+
+	if (zs_malloc_force_movable)
+		gfp |= __GFP_HIGHMEM | __GFP_MOVABLE;
 
 	handle = cache_alloc_handle(pool, gfp);
 	if (!handle)

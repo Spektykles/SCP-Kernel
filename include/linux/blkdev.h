@@ -1807,7 +1807,7 @@ static inline void blk_wake_io_task(struct task_struct *waiter)
 	 * that case, we don't need to signal a wakeup, it's enough to just
 	 * mark us as RUNNING.
 	 */
-	if (waiter == current)
+	if (waiter == current && in_task())
 		__set_current_state(TASK_RUNNING);
 	else
 		wake_up_process(waiter);

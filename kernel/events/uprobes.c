@@ -26,6 +26,7 @@
 #include <linux/percpu-rwsem.h>
 #include <linux/task_work.h>
 #include <linux/shmem_fs.h>
+#include <asm/pgalloc.h>
 
 #include <linux/uprobes.h>
 
@@ -153,23 +154,24 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct page_vma_mapped_walk pvmw = {
-		.page = old_page,
+		.page = compound_head(old_page),
 		.vma = vma,
 		.address = addr,
 	};
 	int err;
 	struct mmu_notifier_range range;
 	struct mem_cgroup *memcg;
+	bool orig = new_page->mapping != NULL;  /* new_page == orig_page */
 
 	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, vma, mm, addr,
 				addr + PAGE_SIZE);
 
-	VM_BUG_ON_PAGE(PageTransHuge(old_page), old_page);
-
-	err = mem_cgroup_try_charge(new_page, vma->vm_mm, GFP_KERNEL, &memcg,
-			false);
-	if (err)
-		return err;
+	if (!orig) {
+		err = mem_cgroup_try_charge(new_page, vma->vm_mm, GFP_KERNEL,
+					    &memcg, false);
+		if (err)
+			return err;
+	}
 
 	/* For try_to_free_swap() and munlock_vma_page() below */
 	lock_page(old_page);
@@ -177,15 +179,23 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 	mmu_notifier_invalidate_range_start(&range);
 	err = -EAGAIN;
 	if (!page_vma_mapped_walk(&pvmw)) {
-		mem_cgroup_cancel_charge(new_page, memcg, false);
+		if (!orig)
+			mem_cgroup_cancel_charge(new_page, memcg, false);
 		goto unlock;
 	}
 	VM_BUG_ON_PAGE(addr != pvmw.address, old_page);
 
 	get_page(new_page);
-	page_add_new_anon_rmap(new_page, vma, addr, false);
-	mem_cgroup_commit_charge(new_page, memcg, false, false);
-	lru_cache_add_active_or_unevictable(new_page, vma);
+	if (orig) {
+		page_add_file_rmap(compound_head(new_page),
+				   PageTransHuge(compound_head(new_page)));
+		inc_mm_counter(mm, mm_counter_file(new_page));
+		dec_mm_counter(mm, MM_ANONPAGES);
+	} else {
+		page_add_new_anon_rmap(new_page, vma, addr, false);
+		mem_cgroup_commit_charge(new_page, memcg, false, false);
+		lru_cache_add_active_or_unevictable(new_page, vma);
+	}
 
 	if (!PageAnon(old_page)) {
 		dec_mm_counter(mm, mm_counter_file(old_page));
@@ -197,7 +207,8 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 	set_pte_at_notify(mm, addr, pvmw.pte,
 			mk_pte(new_page, vma->vm_page_prot));
 
-	page_remove_rmap(old_page, false);
+	page_remove_rmap(compound_head(old_page),
+			 PageTransHuge(compound_head(old_page)));
 	if (!page_mapped(old_page))
 		try_to_free_swap(old_page);
 	page_vma_mapped_walk_done(&pvmw);
@@ -461,20 +472,46 @@ int uprobe_write_opcode(struct arch_uprobe *auprobe, struct mm_struct *mm,
 			unsigned long vaddr, uprobe_opcode_t opcode)
 {
 	struct uprobe *uprobe;
-	struct page *old_page, *new_page;
+	struct page *old_page, *new_page, *orig_page = NULL;
 	struct vm_area_struct *vma;
 	int ret, is_register, ref_ctr_updated = 0;
+	pgoff_t index;
+	pgtable_t prealloc_pgtable = NULL;
+	unsigned long foll_flags = FOLL_FORCE;
 
 	is_register = is_swbp_insn(&opcode);
 	uprobe = container_of(auprobe, struct uprobe, arch);
 
-retry:
-	/* Read the page with vaddr into memory */
+	/* do not FOLL_SPLIT yet */
 	ret = get_user_pages_remote(NULL, mm, vaddr, 1,
-			FOLL_FORCE | FOLL_SPLIT, &old_page, &vma, NULL);
+			foll_flags, &old_page, &vma, NULL);
+
 	if (ret <= 0)
 		return ret;
 
+	if (mm_address_trans_huge(mm, vaddr)) {
+		prealloc_pgtable = pte_alloc_one(mm);
+		if (likely(prealloc_pgtable)) {
+			split_huge_pmd_address(vma, vaddr, false, NULL,
+					       prealloc_pgtable);
+			goto verify;
+		} else {
+			/* fallback to FOLL_SPLIT */
+			foll_flags |= FOLL_SPLIT;
+			put_page(old_page);
+		}
+	} else {
+		goto verify;
+	}
+
+retry:
+	/* Read the page with vaddr into memory */
+	ret = get_user_pages_remote(NULL, mm, vaddr, 1,
+			foll_flags, &old_page, &vma, NULL);
+	if (ret <= 0)
+		return ret;
+
+verify:
 	ret = verify_opcode(old_page, vaddr, &opcode);
 	if (ret <= 0)
 		goto put_old;
@@ -501,6 +538,20 @@ retry:
 	copy_highpage(new_page, old_page);
 	copy_to_page(new_page, vaddr, &opcode, UPROBE_SWBP_INSN_SIZE);
 
+	index = vaddr_to_offset(vma, vaddr & PAGE_MASK) >> PAGE_SHIFT;
+	orig_page = find_get_page(vma->vm_file->f_inode->i_mapping, index);
+	if (orig_page) {
+		if (memcmp(page_address(orig_page),
+			   page_address(new_page), PAGE_SIZE) == 0) {
+			/* if new_page matches orig_page, use orig_page */
+			put_page(new_page);
+			new_page = orig_page;
+		} else {
+			put_page(orig_page);
+			orig_page = NULL;
+		}
+	}
+
 	ret = __replace_page(vma, vaddr, old_page, new_page);
 	put_page(new_page);
 put_old:
@@ -512,6 +563,9 @@ put_old:
 	/* Revert back reference counter if instruction update failed. */
 	if (ret && is_register && ref_ctr_updated)
 		update_ref_ctr(uprobe, mm, -1);
+
+	if (!ret && orig_page && PageTransCompound(orig_page))
+		try_collapse_huge_pmd(mm, vma, vaddr);
 
 	return ret;
 }

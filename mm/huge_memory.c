@@ -2120,7 +2120,7 @@ static void __split_huge_zero_page_pmd(struct vm_area_struct *vma,
 }
 
 static void __split_huge_pmd_locked(struct vm_area_struct *vma, pmd_t *pmd,
-		unsigned long haddr, bool freeze)
+		unsigned long haddr, bool freeze, pgtable_t prealloc_pgtable)
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct page *page;
@@ -2135,10 +2135,15 @@ static void __split_huge_pmd_locked(struct vm_area_struct *vma, pmd_t *pmd,
 	VM_BUG_ON_VMA(vma->vm_end < haddr + HPAGE_PMD_SIZE, vma);
 	VM_BUG_ON(!is_pmd_migration_entry(*pmd) && !pmd_trans_huge(*pmd)
 				&& !pmd_devmap(*pmd));
+	/* only file backed vma need preallocate pgtable*/
+	VM_BUG_ON(vma_is_anonymous(vma) && prealloc_pgtable);
 
 	count_vm_event(THP_SPLIT_PMD);
 
-	if (!vma_is_anonymous(vma)) {
+	if (prealloc_pgtable) {
+		pgtable_trans_huge_deposit(mm, pmd, prealloc_pgtable);
+		mm_inc_nr_pmds(mm);
+	} else if (!vma_is_anonymous(vma)) {
 		_pmd = pmdp_huge_clear_flush_notify(vma, haddr, pmd);
 		/*
 		 * We are going to unmap this huge page. So
@@ -2279,8 +2284,9 @@ static void __split_huge_pmd_locked(struct vm_area_struct *vma, pmd_t *pmd,
 	}
 }
 
-void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
-		unsigned long address, bool freeze, struct page *page)
+static void ____split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
+		unsigned long address, bool freeze, struct page *page,
+		pgtable_t prealloc_pgtable)
 {
 	spinlock_t *ptl;
 	struct mmu_notifier_range range;
@@ -2305,7 +2311,8 @@ void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 			clear_page_mlock(page);
 	} else if (!(pmd_devmap(*pmd) || is_pmd_migration_entry(*pmd)))
 		goto out;
-	__split_huge_pmd_locked(vma, pmd, range.start, freeze);
+	__split_huge_pmd_locked(vma, pmd, range.start, freeze,
+				prealloc_pgtable);
 out:
 	spin_unlock(ptl);
 	/*
@@ -2324,8 +2331,14 @@ out:
 	mmu_notifier_invalidate_range_only_end(&range);
 }
 
+void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
+		unsigned long address, bool freeze, struct page *page)
+{
+	____split_huge_pmd(vma, pmd, address, freeze, page, NULL);
+}
+
 void split_huge_pmd_address(struct vm_area_struct *vma, unsigned long address,
-		bool freeze, struct page *page)
+		bool freeze, struct page *page, pgtable_t prealloc_pgtable)
 {
 	pgd_t *pgd;
 	p4d_t *p4d;
@@ -2346,7 +2359,31 @@ void split_huge_pmd_address(struct vm_area_struct *vma, unsigned long address,
 
 	pmd = pmd_offset(pud, address);
 
-	__split_huge_pmd(vma, pmd, address, freeze, page);
+	____split_huge_pmd(vma, pmd, address, freeze, page, prealloc_pgtable);
+}
+
+bool mm_address_trans_huge(struct mm_struct *mm, unsigned long address)
+{
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	pgd = pgd_offset(mm, address);
+	if (!pgd_present(*pgd))
+		return false;
+
+	p4d = p4d_offset(pgd, address);
+	if (!p4d_present(*p4d))
+		return false;
+
+	pud = pud_offset(p4d, address);
+	if (!pud_present(*pud))
+		return false;
+
+	pmd = pmd_offset(pud, address);
+
+	return pmd_trans_huge(*pmd);
 }
 
 void vma_adjust_trans_huge(struct vm_area_struct *vma,
@@ -2362,7 +2399,7 @@ void vma_adjust_trans_huge(struct vm_area_struct *vma,
 	if (start & ~HPAGE_PMD_MASK &&
 	    (start & HPAGE_PMD_MASK) >= vma->vm_start &&
 	    (start & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE <= vma->vm_end)
-		split_huge_pmd_address(vma, start, false, NULL);
+		split_huge_pmd_address(vma, start, false, NULL, NULL);
 
 	/*
 	 * If the new end address isn't hpage aligned and it could
@@ -2372,7 +2409,7 @@ void vma_adjust_trans_huge(struct vm_area_struct *vma,
 	if (end & ~HPAGE_PMD_MASK &&
 	    (end & HPAGE_PMD_MASK) >= vma->vm_start &&
 	    (end & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE <= vma->vm_end)
-		split_huge_pmd_address(vma, end, false, NULL);
+		split_huge_pmd_address(vma, end, false, NULL, NULL);
 
 	/*
 	 * If we're also updating the vma->vm_next->vm_start, if the new
@@ -2386,7 +2423,7 @@ void vma_adjust_trans_huge(struct vm_area_struct *vma,
 		if (nstart & ~HPAGE_PMD_MASK &&
 		    (nstart & HPAGE_PMD_MASK) >= next->vm_start &&
 		    (nstart & HPAGE_PMD_MASK) + HPAGE_PMD_SIZE <= next->vm_end)
-			split_huge_pmd_address(next, nstart, false, NULL);
+			split_huge_pmd_address(next, nstart, false, NULL, NULL);
 	}
 }
 
@@ -2884,6 +2921,53 @@ static struct shrinker deferred_split_shrinker = {
 	.seeks = DEFAULT_SEEKS,
 	.flags = SHRINKER_NUMA_AWARE,
 };
+
+/**
+ * This function only checks whether all PTEs in this PMD point to
+ * continuous pages, the caller should make sure at least of these PTEs
+ * points to a huge page, e.g. PageTransCompound(one_page) != 0.
+ */
+void try_collapse_huge_pmd(struct mm_struct *mm,
+			   struct vm_area_struct *vma,
+			   unsigned long vaddr)
+{
+	struct mmu_notifier_range range;
+	unsigned long addr;
+	pmd_t *pmd, _pmd;
+	spinlock_t *ptl;
+	long long head;
+	int i;
+
+	pmd = mm_find_pmd(mm, vaddr);
+	if (!pmd)
+		return;
+
+	addr = vaddr & HPAGE_PMD_MASK;
+	head = pte_val(*pte_offset_map(pmd, addr));
+	ptl = pmd_lock(mm, pmd);
+	for (i = 0; i < HPAGE_PMD_NR; i++, addr += PAGE_SIZE) {
+		pte_t *pte = pte_offset_map(pmd, addr);
+
+		if (pte_val(*pte) != head + i * PAGE_SIZE) {
+			spin_unlock(ptl);
+			return;
+		}
+	}
+
+	addr = vaddr & HPAGE_PMD_MASK;
+	mmu_notifier_range_init(&range, MMU_NOTIFY_CLEAR, 0, NULL, mm,
+				addr, addr + HPAGE_PMD_SIZE);
+	mmu_notifier_invalidate_range_start(&range);
+
+	_pmd = pmdp_collapse_flush(vma, addr, pmd);
+	spin_unlock(ptl);
+	mmu_notifier_invalidate_range_end(&range);
+	mm_dec_nr_ptes(mm);
+	pte_free(mm, pmd_pgtable(_pmd));
+	add_mm_counter(mm,
+		       shmem_file(vma->vm_file) ? MM_SHMEMPAGES : MM_FILEPAGES,
+		       -HPAGE_PMD_NR);
+}
 
 #ifdef CONFIG_DEBUG_FS
 static int split_huge_pages_set(void *data, u64 val)

@@ -161,7 +161,9 @@ void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 
 
 void split_huge_pmd_address(struct vm_area_struct *vma, unsigned long address,
-		bool freeze, struct page *page);
+		bool freeze, struct page *page, pgtable_t prealloc_pgtable);
+
+bool mm_address_trans_huge(struct mm_struct *mm, unsigned long address);
 
 void __split_huge_pud(struct vm_area_struct *vma, pud_t *pud,
 		unsigned long address);
@@ -250,6 +252,10 @@ static inline bool thp_migration_supported(void)
 	return IS_ENABLED(CONFIG_ARCH_ENABLE_THP_MIGRATION);
 }
 
+extern inline void try_collapse_huge_pmd(struct mm_struct *mm,
+					 struct vm_area_struct *vma,
+					 unsigned long vaddr);
+
 #else /* CONFIG_TRANSPARENT_HUGEPAGE */
 #define HPAGE_PMD_SHIFT ({ BUILD_BUG(); 0; })
 #define HPAGE_PMD_MASK ({ BUILD_BUG(); 0; })
@@ -299,7 +305,14 @@ static inline void deferred_split_huge_page(struct page *page) {}
 static inline void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 		unsigned long address, bool freeze, struct page *page) {}
 static inline void split_huge_pmd_address(struct vm_area_struct *vma,
-		unsigned long address, bool freeze, struct page *page) {}
+		unsigned long address, bool freeze, struct page *page,
+		pgtable_t prealloc_pgtable) {}
+
+static inline bool mm_address_trans_huge(struct mm_struct *mm,
+					 unsigned long address)
+{
+	return false;
+}
 
 #define split_huge_pud(__vma, __pmd, __address)	\
 	do { } while (0)
@@ -368,6 +381,11 @@ static inline bool thp_migration_supported(void)
 {
 	return false;
 }
+
+static inline void try_collapse_huge_pmd(struct mm_struct *mm,
+					 struct vm_area_struct *vma,
+					 unsigned long vaddr) {}
+
 #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 
 #endif /* _LINUX_HUGE_MM_H */

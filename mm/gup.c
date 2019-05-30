@@ -2426,6 +2426,18 @@ int get_user_pages_fast(unsigned long start, int nr_pages,
 		local_irq_enable();
 		ret = nr;
 	}
+#if defined(CONFIG_CMA)
+	if (unlikely(gup_flags & FOLL_LONGTERM)) {
+		int i, j;
+
+		for (i = 0; i < nr; i++)
+			if (is_migrate_cma_page(pages[i])) {
+				for (j = i; j < nr; j++)
+					put_page(pages[j]);
+				nr = i;
+			}
+	}
+#endif
 
 	if (nr < nr_pages) {
 		/* Try to get the remaining pages with get_user_pages */

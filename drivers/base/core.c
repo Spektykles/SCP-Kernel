@@ -2570,6 +2570,7 @@ int device_offline(struct device *dev)
 			if (!ret) {
 				kobject_uevent(&dev->kobj, KOBJ_OFFLINE);
 				dev->offline = true;
+				device_platform_notify(dev, KOBJ_OFFLINE);
 			}
 		}
 	}
@@ -2599,6 +2600,7 @@ int device_online(struct device *dev)
 			if (!ret) {
 				kobject_uevent(&dev->kobj, KOBJ_ONLINE);
 				dev->offline = false;
+				device_platform_notify(dev, KOBJ_ONLINE);
 			}
 		} else {
 			ret = 1;

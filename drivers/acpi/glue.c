@@ -360,6 +360,81 @@ static int acpi_device_notify_remove(struct device *dev)
 	return 0;
 }
 
+static void acpi_device_eject_tracer(struct device *dev,
+				enum kobject_action action)
+{
+	struct acpi_device *adev = ACPI_COMPANION(dev);
+	struct acpi_device *adev_root = NULL;
+	struct eject_data *eject_node = NULL;
+	struct eject_data *eject_root = NULL;
+
+	if (!adev || !adev->eject_stat)
+		return;
+
+	acpi_scan_lock_acquire();
+
+	eject_node = (struct eject_data *)adev->eject_stat;
+
+	if (eject_node->base.root_handle)
+		adev_root =
+		    acpi_bus_get_acpi_device(eject_node->base.root_handle);
+
+	if (adev_root)
+		eject_root = (struct eject_data *)adev_root->eject_stat;
+
+	if (action == KOBJ_OFFLINE) {
+		/*
+		 * If the offline device is child, update its eject_root's
+		 * number of online nodes.
+		 */
+		if (eject_root) {
+			if (eject_root->online_nodes)
+				eject_root->online_nodes--;
+
+			if (eject_root->online_nodes <=
+			    adev_root->physical_node_count)
+				acpi_eject_retry(adev_root);
+
+			goto tracer_end;
+		}
+		/*
+		 * Adjust number of online nodes when any physical node under
+		 * eject_root is offline. Trigger acpi_eject_try() once all
+		 * nodes are offline.
+		 */
+		if (eject_node->online_nodes)
+			eject_node->online_nodes--;
+
+		if (!eject_node->online_nodes)
+			acpi_eject_retry(adev);
+
+	} else if (action == KOBJ_ONLINE) {
+		/* !eject_root means now eject_node is root */
+		if (!eject_root)
+			eject_root = eject_node;
+
+		if (eject_root->status == ACPI_EJECT_STATUS_GOING_OFFLINE) {
+			eject_root->status = ACPI_EJECT_STATUS_FAIL;
+			acpi_eject_retry(adev_root);
+		}
+	}
+tracer_end:
+	if (adev_root)
+		acpi_bus_put_acpi_device(adev_root);
+
+	acpi_scan_lock_release();
+}
+
+static inline void acpi_device_check_eject_status(struct device *dev)
+{
+	acpi_device_eject_tracer(dev, KOBJ_OFFLINE);
+}
+
+static inline void acpi_device_check_eject_recover(struct device *dev)
+{
+	acpi_device_eject_tracer(dev, KOBJ_ONLINE);
+}
+
 int acpi_platform_notify(struct device *dev, enum kobject_action action)
 {
 	switch (action) {
@@ -368,6 +443,12 @@ int acpi_platform_notify(struct device *dev, enum kobject_action action)
 		break;
 	case KOBJ_REMOVE:
 		acpi_device_notify_remove(dev);
+		break;
+	case KOBJ_OFFLINE:
+		acpi_device_check_eject_status(dev);
+		break;
+	case KOBJ_ONLINE:
+		acpi_device_check_eject_recover(dev);
 		break;
 	default:
 		break;

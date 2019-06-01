@@ -33,7 +33,7 @@ static int acpi_container_offline(struct container_dev *cdev)
 
 	/* Check all of the dependent devices' physical companions. */
 	list_for_each_entry(child, &adev->children, node)
-		if (!acpi_scan_is_offline(child, false))
+		if (!acpi_scan_is_offline(child))
 			return -EBUSY;
 
 	return 0;

@@ -330,7 +330,7 @@ struct acpi_device_physical_node {
 	unsigned int node_id;
 	struct list_head node;
 	struct device *dev;
-	bool put_online:1;
+	bool changed_offline:1;
 };
 
 struct acpi_device_properties {
@@ -378,6 +378,7 @@ struct acpi_device {
 	struct list_head physical_node_list;
 	struct mutex physical_node_lock;
 	void (*remove)(struct acpi_device *);
+	void *eject_stat;
 };
 
 /* Non-device subnode */

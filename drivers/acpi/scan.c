@@ -113,11 +113,10 @@ int acpi_scan_add_handler_with_hotplug(struct acpi_scan_handler *handler,
 	return 0;
 }
 
-bool acpi_scan_is_offline(struct acpi_device *adev, bool uevent)
+bool acpi_scan_is_offline(struct acpi_device *adev)
 {
 	struct acpi_device_physical_node *pn;
 	bool offline = true;
-	char *envp[] = { "EVENT=offline", NULL };
 
 	/*
 	 * acpi_container_offline() calls this for all of the container's
@@ -127,9 +126,6 @@ bool acpi_scan_is_offline(struct acpi_device *adev, bool uevent)
 
 	list_for_each_entry(pn, &adev->physical_node_list, node)
 		if (device_supports_offline(pn->dev) && !pn->dev->offline) {
-			if (uevent)
-				kobject_uevent_env(&pn->dev->kobj, KOBJ_CHANGE, envp);
-
 			offline = false;
 			break;
 		}
@@ -138,12 +134,84 @@ bool acpi_scan_is_offline(struct acpi_device *adev, bool uevent)
 	return offline;
 }
 
-static acpi_status acpi_bus_offline(acpi_handle handle, u32 lvl, void *data,
-				    void **ret_p)
+void acpi_eject_retry(struct acpi_device *adev)
+{
+	acpi_status status;
+
+	get_device(&adev->dev);
+
+	status = acpi_hotplug_schedule(adev, ACPI_OST_EC_OSPM_EJECT);
+	if (ACPI_FAILURE(status)) {
+		pr_debug("Failed to reschedule an eject event\n");
+		put_device(&adev->dev);
+		acpi_evaluate_ost(adev->handle, ACPI_OST_EC_OSPM_EJECT,
+				ACPI_OST_SC_NON_SPECIFIC_FAILURE, NULL);
+		return;
+	}
+	pr_debug("Rescheduled an eject event\n");
+}
+
+static acpi_status acpi_init_eject_stat(struct acpi_device *adev,
+					enum acpi_eject_node_type type)
+{
+	struct eject_data *eject_node = (struct eject_data *) adev->eject_stat;
+
+	if (!eject_node) {
+		eject_node = kzalloc(sizeof(*eject_node), GFP_KERNEL);
+		if (!eject_node)
+			return AE_NO_MEMORY;
+		adev->eject_stat = eject_node;
+	}
+
+	eject_node->base.type = type;
+
+	if (type == ACPI_EJECT_CHILD_NODE)
+		return AE_OK;
+
+	/* Initialization of eject root node */
+	eject_node->status = ACPI_EJECT_STATUS_GOING_OFFLINE;
+	eject_node->online_nodes = 0;
+
+	return AE_OK;
+}
+
+static void acpi_enable_eject_stat(struct acpi_device *adev,
+				struct acpi_device *root_adev, u32 online_nodes)
+{
+	struct eject_data *eject_node = NULL;
+	struct eject_data *eject_root = NULL;
+
+	if (adev)
+		eject_node = (struct eject_data *)adev->eject_stat;
+	if (root_adev)
+		eject_root = (struct eject_data *)root_adev->eject_stat;
+
+	if (eject_node) {
+		if (eject_node != eject_root)
+			eject_node->base.root_handle = root_adev->handle;
+		else
+			eject_node->base.root_handle = 0;
+	}
+
+	/* Update online_nodes of root device */
+	if (eject_root) {
+		eject_root->online_nodes += online_nodes;
+		pr_debug("Current online nodes:%u\n",
+			eject_root->online_nodes);
+	}
+}
+
+static void acpi_free_eject_stat(struct acpi_device *adev)
+{
+	kfree(adev->eject_stat);
+	adev->eject_stat = NULL;
+}
+
+static acpi_status acpi_bus_offline_prepare(acpi_handle handle, u32 lvl,
+					void *data, void **ret_p)
 {
 	struct acpi_device *device = NULL;
-	struct acpi_device_physical_node *pn;
-	bool second_pass = (bool)data;
+	struct eject_data_base *eject_obj = (struct eject_data_base *)data;
 	acpi_status status = AE_OK;
 
 	if (acpi_bus_get_device(handle, &device))
@@ -154,101 +222,179 @@ static acpi_status acpi_bus_offline(acpi_handle handle, u32 lvl, void *data,
 		return AE_SUPPORT;
 	}
 
-	mutex_lock(&device->physical_node_lock);
-
-	list_for_each_entry(pn, &device->physical_node_list, node) {
-		int ret;
-
-		if (second_pass) {
-			/* Skip devices offlined by the first pass. */
-			if (pn->put_online)
-				continue;
-		} else {
-			pn->put_online = false;
-		}
-		ret = device_offline(pn->dev);
-		if (ret >= 0) {
-			pn->put_online = !ret;
-		} else {
-			*ret_p = pn->dev;
-			if (second_pass) {
-				status = AE_ERROR;
-				break;
-			}
-		}
-	}
-
-	mutex_unlock(&device->physical_node_lock);
+	status = acpi_init_eject_stat(device, eject_obj->type);
+	if (ACPI_FAILURE(status))
+		*ret_p = &device->dev;
 
 	return status;
 }
 
-static acpi_status acpi_bus_online(acpi_handle handle, u32 lvl, void *data,
-				   void **ret_p)
+
+static acpi_status acpi_bus_offline_notify(acpi_handle handle, u32 lvl,
+					void *data, void **ret_p)
 {
 	struct acpi_device *device = NULL;
+	struct acpi_device *root_device = NULL;
 	struct acpi_device_physical_node *pn;
+	struct eject_data_base *eject_obj = (struct eject_data_base *)data;
+	u32 online_nodes = 0;
+	char *envp[] = { "EVENT=offline", NULL };
 
 	if (acpi_bus_get_device(handle, &device))
 		return AE_OK;
 
+	if (device->handler && !device->handler->hotplug.enabled) {
+		*ret_p = &device->dev;
+		return AE_SUPPORT;
+	}
+
+	if (eject_obj->root_handle == device->handle) {
+		root_device = device;
+	} else if (acpi_bus_get_device(eject_obj->root_handle, &root_device)) {
+		*ret_p = &device->dev;
+		return AE_NULL_OBJECT;
+	}
+
 	mutex_lock(&device->physical_node_lock);
-
-	list_for_each_entry(pn, &device->physical_node_list, node)
-		if (pn->put_online) {
-			device_online(pn->dev);
-			pn->put_online = false;
+	list_for_each_entry(pn, &device->physical_node_list, node) {
+		if (device_supports_offline(pn->dev) && !(pn->dev->offline)) {
+			kobject_uevent_env(&pn->dev->kobj, KOBJ_CHANGE, envp);
+			online_nodes++;
+			pn->changed_offline = true;
 		}
-
+	}
+	acpi_enable_eject_stat(device, root_device, online_nodes);
 	mutex_unlock(&device->physical_node_lock);
 
 	return AE_OK;
 }
 
-static int acpi_scan_try_to_offline(struct acpi_device *device)
+static acpi_status acpi_bus_online_notify(acpi_handle handle, u32 lvl,
+						void *data, void **ret_p)
+{
+	struct acpi_device *device = NULL;
+	struct acpi_device_physical_node *pn;
+	char *envp[] = { "EVENT=online", NULL };
+
+	if (acpi_bus_get_device(handle, &device))
+		return AE_OK;
+
+	acpi_free_eject_stat(device);
+
+	mutex_lock(&device->physical_node_lock);
+
+	list_for_each_entry(pn, &device->physical_node_list, node) {
+		if (pn->changed_offline) {
+			kobject_uevent_env(&pn->dev->kobj, KOBJ_CHANGE, envp);
+			pn->changed_offline = false;
+		}
+	}
+
+	mutex_unlock(&device->physical_node_lock);
+	return AE_OK;
+}
+
+static void acpi_scan_notify_online(struct acpi_device *device)
+{
+	acpi_handle handle = device->handle;
+
+	acpi_bus_online_notify(handle, 0, NULL, NULL);
+	acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
+				acpi_bus_online_notify, NULL, NULL, NULL);
+}
+
+static int acpi_scan_notify_offline(struct acpi_device *device)
 {
 	acpi_handle handle = device->handle;
 	struct device *errdev = NULL;
+	struct eject_data_base base_data = {ACPI_EJECT_ROOT_NODE, handle};
 	acpi_status status;
 
-	/*
-	 * Carry out two passes here and ignore errors in the first pass,
-	 * because if the devices in question are memory blocks and
-	 * CONFIG_MEMCG is set, one of the blocks may hold data structures
-	 * that the other blocks depend on, but it is not known in advance which
-	 * block holds them.
-	 *
-	 * If the first pass is successful, the second one isn't needed, though.
-	 */
-	status = acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
-				     NULL, acpi_bus_offline, (void *)false,
-				     (void **)&errdev);
-	if (status == AE_SUPPORT) {
-		dev_warn(errdev, "Offline disabled.\n");
-		acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
-				    acpi_bus_online, NULL, NULL, NULL);
-		return -EPERM;
-	}
-	acpi_bus_offline(handle, 0, (void *)false, (void **)&errdev);
-	if (errdev) {
-		errdev = NULL;
-		acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
-				    NULL, acpi_bus_offline, (void *)true,
-				    (void **)&errdev);
-		if (!errdev)
-			acpi_bus_offline(handle, 0, (void *)true,
-					 (void **)&errdev);
+	status = acpi_bus_offline_prepare(handle, 0, (void *)&base_data,
+					(void **)&errdev);
+	if (errdev)
+		goto notify_error;
 
-		if (errdev) {
-			dev_warn(errdev, "Offline failed.\n");
-			acpi_bus_online(handle, 0, NULL, NULL);
-			acpi_walk_namespace(ACPI_TYPE_ANY, handle,
-					    ACPI_UINT32_MAX, acpi_bus_online,
-					    NULL, NULL, NULL);
+	base_data.type = ACPI_EJECT_CHILD_NODE;
+	status = acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
+			acpi_bus_offline_prepare, acpi_bus_offline_notify,
+			(void *)&base_data, (void **)&errdev);
+	if (errdev)
+		goto notify_error;
+
+	base_data.type = ACPI_EJECT_ROOT_NODE;
+	status = acpi_bus_offline_notify(handle, 0, (void *)&base_data,
+				(void **)&errdev);
+
+	if (errdev)
+		goto notify_error;
+
+	return 0;
+
+notify_error:
+	acpi_scan_notify_online(device);
+
+	switch (status) {
+	case AE_NO_MEMORY:
+		return -ENOMEM;
+	case AE_NULL_OBJECT:
+		return -EINVAL;
+	case AE_SUPPORT:
+		dev_warn(errdev, "Offline disabled.\n");
+		return -EPERM;
+	default:
+		dev_warn(errdev, "Offline failed. (status:%#x)\n", status);
+		return -EBUSY;
+	}
+}
+
+static int acpi_scan_offline_check(struct acpi_device *device)
+{
+	int ret = 0;
+	struct eject_data *eject_obj = (struct eject_data *) device->eject_stat;
+
+	/* Send recovery events to userland if any failure occur */
+	if (eject_obj && eject_obj->status == ACPI_EJECT_STATUS_FAIL) {
+		dev_warn(&device->dev, "Eject failed. Recover bus status\n");
+		acpi_scan_notify_online(device);
+		return -EAGAIN;
+	}
+
+	/* Send offline request to userland if the container is not offline */
+	if (!acpi_scan_is_offline(device)) {
+		ret = acpi_scan_notify_offline(device);
+		if (!ret)
 			return -EBUSY;
+	}
+
+	return ret;
+}
+
+char *acpi_eject_status_string(struct acpi_device *adev)
+{
+	struct eject_data *eject_obj;
+	char *status_string = "none";
+
+	mutex_lock(&acpi_scan_lock);
+	eject_obj = (struct eject_data *) adev->eject_stat;
+
+	if (eject_obj) {
+		switch (eject_obj->status) {
+		case ACPI_EJECT_STATUS_NONE:
+			break;
+		case ACPI_EJECT_STATUS_GOING_OFFLINE:
+			status_string = "going offline";
+			break;
+		case ACPI_EJECT_STATUS_FAIL:
+			status_string = "failure";
+			break;
+		default:
+			status_string = "(unknown)";
 		}
 	}
-	return 0;
+
+	mutex_unlock(&acpi_scan_lock);
+	return status_string;
 }
 
 static int acpi_scan_hot_remove(struct acpi_device *device)
@@ -256,15 +402,11 @@ static int acpi_scan_hot_remove(struct acpi_device *device)
 	acpi_handle handle = device->handle;
 	unsigned long long sta;
 	acpi_status status;
+	int ret;
 
-	if (device->handler && device->handler->hotplug.demand_offline) {
-		if (!acpi_scan_is_offline(device, true))
-			return -EBUSY;
-	} else {
-		int error = acpi_scan_try_to_offline(device);
-		if (error)
-			return error;
-	}
+	ret = acpi_scan_offline_check(device);
+	if (ret)
+		return ret;
 
 	ACPI_DEBUG_PRINT((ACPI_DB_INFO,
 		"Hot-removing device %s...\n", dev_name(&device->dev)));
@@ -2075,6 +2217,8 @@ void acpi_bus_trim(struct acpi_device *adev)
 
 	list_for_each_entry_reverse(child, &adev->children, node)
 		acpi_bus_trim(child);
+
+	acpi_free_eject_stat(adev);
 
 	adev->flags.match_driver = false;
 	if (handler) {

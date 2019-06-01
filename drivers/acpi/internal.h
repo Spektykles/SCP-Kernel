@@ -83,7 +83,7 @@ void acpi_apd_init(void);
 acpi_status acpi_hotplug_schedule(struct acpi_device *adev, u32 src);
 bool acpi_queue_hotplug_work(struct work_struct *work);
 void acpi_device_hotplug(struct acpi_device *adev, u32 src);
-bool acpi_scan_is_offline(struct acpi_device *adev, bool uevent);
+bool acpi_scan_is_offline(struct acpi_device *adev);
 
 acpi_status acpi_sysfs_table_handler(u32 event, void *table, void *context);
 void acpi_scan_table_handler(u32 event, void *table, void *context);
@@ -263,5 +263,34 @@ void acpi_init_lpit(void);
 #else
 static inline void acpi_init_lpit(void) { }
 #endif
+
+/* --------------------------------------------------------------------------
+ *				Eject Status
+ * --------------------------------------------------------------------------
+ */
+enum acpi_eject_status {
+	ACPI_EJECT_STATUS_NONE = 0,
+	ACPI_EJECT_STATUS_GOING_OFFLINE,
+	ACPI_EJECT_STATUS_FAIL
+};
+
+enum acpi_eject_node_type {
+	ACPI_EJECT_CHILD_NODE = 0,
+	ACPI_EJECT_ROOT_NODE
+};
+
+struct eject_data_base {
+	enum acpi_eject_node_type type;
+	acpi_handle root_handle;
+};
+
+struct eject_data {
+	struct eject_data_base base;
+	enum acpi_eject_status status;
+	u32 online_nodes;
+};
+
+void acpi_eject_retry(struct acpi_device *adev);
+char *acpi_eject_status_string(struct acpi_device *adev);
 
 #endif /* _ACPI_INTERNAL_H_ */

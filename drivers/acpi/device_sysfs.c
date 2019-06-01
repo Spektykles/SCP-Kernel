@@ -395,7 +395,25 @@ acpi_eject_store(struct device *d, struct device_attribute *attr,
 	return status == AE_NO_MEMORY ? -ENOMEM : -EAGAIN;
 }
 
-static DEVICE_ATTR(eject, 0200, NULL, acpi_eject_store);
+static ssize_t acpi_eject_show(struct device *d,
+				struct device_attribute *attr, char *buf)
+{
+	struct acpi_device *acpi_device = to_acpi_device(d);
+	acpi_object_type not_used;
+	acpi_status status;
+
+	if ((!acpi_device->handler || !acpi_device->handler->hotplug.enabled)
+	    && !acpi_device->driver)
+		return -ENODEV;
+
+	status = acpi_get_type(acpi_device->handle, &not_used);
+	if (ACPI_FAILURE(status) || !acpi_device->flags.ejectable)
+		return -ENODEV;
+
+	return sprintf(buf, "%s\n", acpi_eject_status_string(acpi_device));
+}
+
+static DEVICE_ATTR(eject, 0644, acpi_eject_show, acpi_eject_store);
 
 static ssize_t
 acpi_device_hid_show(struct device *dev, struct device_attribute *attr, char *buf)

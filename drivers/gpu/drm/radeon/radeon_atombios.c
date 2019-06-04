@@ -635,6 +635,10 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 					connector_object_id = con_obj_id;
 				}
 			} else {
+				if (con_obj_id >= ARRAY_SIZE(object_connector_convert)) {
+					DRM_ERROR("invalid con_obj_id %d\n", con_obj_id);
+					continue;
+				}
 				igp_lane_info = 0;
 				connector_type =
 				    object_connector_convert[con_obj_id];

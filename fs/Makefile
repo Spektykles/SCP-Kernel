@@ -132,3 +132,4 @@ obj-$(CONFIG_CEPH_FS)		+= ceph/
 obj-$(CONFIG_PSTORE)		+= pstore/
 obj-$(CONFIG_EFIVAR_FS)		+= efivarfs/
 obj-$(CONFIG_VBOXSF_FS)		+= vboxsf/
+obj-$(CONFIG_APFS_FS)		+= apfs/

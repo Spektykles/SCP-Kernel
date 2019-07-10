@@ -18,7 +18,7 @@ LT_INIT
 # Silent build for automake >= 1.11
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
-AC_SUBST([EXTRA_CFLAGS], ["-Wall -Werror -Wextra -std=gnu99"])
+AC_SUBST([EXTRA_CFLAGS], ["-Wall -Werror -Wextra -std=gnu99 -Wno-address-of-packed-member"])
 
 # Checks for programs.
 AC_PROG_CC
@@ -98,10 +98,10 @@ AC_ARG_WITH([fortify],
 			    dnl [ACTION-IF-GIVEN]
 			    [if test "$withval" = "yes"; then
 				AC_MSG_RESULT([yes])
-				CFLAGS="$CFLAGS -D_FORTIFY_SOURCE -O"
+				CFLAGS="$CFLAGS -D_FORTIFY_SOURCE -O -Wno-address-of-packed-member"
 			     else
 			     	AC_MSG_RESULT([no])
-				CFLAGS="$CFLAGS -U_FORTIFY_SOURCE"
+				CFLAGS="$CFLAGS -U_FORTIFY_SOURCE -Wno-address-of-packed-member"
 			     fi
 			    ],
 			    dnl [ACTION-IF-NOT-GIVEN]

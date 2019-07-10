@@ -3,7 +3,7 @@
 
 PTHREAD_LIBS = -lpthread
 WARNINGS = -Wall -Wextra
-CFLAGS = $(WARNINGS) -g -I../include
+CFLAGS = $(WARNINGS) -g -Wno-address-of-packed-member -I../include
 LDFLAGS = $(PTHREAD_LIBS)
 
 all: testusb ffs-test

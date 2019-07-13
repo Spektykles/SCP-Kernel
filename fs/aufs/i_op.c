@@ -640,7 +640,7 @@ out:
 
 static void au_pin_hdir_set_owner(struct au_pin *p, struct task_struct *task)
 {
-#if !defined(CONFIG_RWSEM_GENERIC_SPINLOCK) && defined(CONFIG_RWSEM_SPIN_ON_OWNER)
+#if defined(CONFIG_DEBUG_MUTEXES) && !defined(CONFIG_RWSEM_GENERIC_SPINLOCK) && defined(CONFIG_RWSEM_SPIN_ON_OWNER)
 	p->hdir->hi_inode->i_rwsem.owner = task;
 #endif
 }

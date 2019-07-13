@@ -130,6 +130,7 @@ else
         cflags-$(CONFIG_MSTEAMROLLER) += $(call cc-option,-march=bdver3)
         cflags-$(CONFIG_MEXCAVATOR) += $(call cc-option,-march=bdver4)
         cflags-$(CONFIG_MZEN) += $(call cc-option,-march=znver1)
+        cflags-$(CONFIG_MZEN2) += $(call cc-option,-march=znver2)
         cflags-$(CONFIG_MPSC) += $(call cc-option,-march=nocona)
 
         cflags-$(CONFIG_MCORE2) += \

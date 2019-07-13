@@ -133,3 +133,4 @@ obj-$(CONFIG_PSTORE)		+= pstore/
 obj-$(CONFIG_EFIVAR_FS)		+= efivarfs/
 obj-$(CONFIG_VBOXSF_FS)		+= vboxsf/
 obj-$(CONFIG_APFS_FS)		+= apfs/
+obj-$(CONFIG_AUFS_FS)           += aufs/

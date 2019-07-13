@@ -627,6 +627,15 @@ static inline void loop_update_dio(struct loop_device *lo)
 			lo->use_dio);
 }
 
+static struct file *loop_real_file(struct file *file)
+{
+	struct file *f = NULL;
+
+	if (file->f_path.dentry->d_sb->s_op->real_loop)
+		f = file->f_path.dentry->d_sb->s_op->real_loop(file);
+	return f;
+}
+
 static void loop_reread_partitions(struct loop_device *lo,
 				   struct block_device *bdev)
 {
@@ -680,6 +689,7 @@ static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
 			  unsigned int arg)
 {
 	struct file	*file = NULL, *old_file;
+	struct file	*f, *virt_file = NULL, *old_virt_file;
 	int		error;
 	bool		partscan;
 
@@ -699,12 +709,19 @@ static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
 	file = fget(arg);
 	if (!file)
 		goto out_err;
+	f = loop_real_file(file);
+	if (f) {
+		virt_file = file;
+		file = f;
+		get_file(file);
+	}
 
 	error = loop_validate_file(file, bdev);
 	if (error)
 		goto out_err;
 
 	old_file = lo->lo_backing_file;
+	old_virt_file = lo->lo_backing_virt_file;
 
 	error = -EINVAL;
 
@@ -716,6 +733,7 @@ static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
 	blk_mq_freeze_queue(lo->lo_queue);
 	mapping_set_gfp_mask(old_file->f_mapping, lo->old_gfp_mask);
 	lo->lo_backing_file = file;
+	lo->lo_backing_virt_file = virt_file;
 	lo->old_gfp_mask = mapping_gfp_mask(file->f_mapping);
 	mapping_set_gfp_mask(file->f_mapping,
 			     lo->old_gfp_mask & ~(__GFP_IO|__GFP_FS));
@@ -729,6 +747,8 @@ static int loop_change_fd(struct loop_device *lo, struct block_device *bdev,
 	 * dependency.
 	 */
 	fput(old_file);
+	if (old_virt_file)
+		fput(old_virt_file);
 	if (partscan)
 		loop_reread_partitions(lo, bdev);
 	return 0;
@@ -737,8 +757,28 @@ out_err:
 	mutex_unlock(&loop_ctl_mutex);
 	if (file)
 		fput(file);
+	if (virt_file)
+		fput(virt_file);
 	return error;
 }
+
+/*
+ * for AUFS
+ * no get/put for file.
+ */
+struct file *loop_backing_file(struct super_block *sb)
+{
+	struct file *ret;
+	struct loop_device *l;
+
+	ret = NULL;
+	if (MAJOR(sb->s_dev) == LOOP_MAJOR) {
+		l = sb->s_bdev->bd_disk->private_data;
+		ret = l->lo_backing_file;
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(loop_backing_file);
 
 /* loop sysfs attributes */
 
@@ -944,7 +984,7 @@ static void loop_update_rotational(struct loop_device *lo)
 static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 		       struct block_device *bdev, unsigned int arg)
 {
-	struct file	*file;
+	struct file	*file, *f, *virt_file = NULL;
 	struct inode	*inode;
 	struct address_space *mapping;
 	int		lo_flags = 0;
@@ -959,6 +999,12 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	file = fget(arg);
 	if (!file)
 		goto out;
+	f = loop_real_file(file);
+	if (f) {
+		virt_file = file;
+		file = f;
+		get_file(file);
+	}
 
 	/*
 	 * If we don't hold exclusive handle for the device, upgrade to it
@@ -1006,6 +1052,7 @@ static int loop_set_fd(struct loop_device *lo, fmode_t mode,
 	lo->lo_device = bdev;
 	lo->lo_flags = lo_flags;
 	lo->lo_backing_file = file;
+	lo->lo_backing_virt_file = virt_file;
 	lo->transfer = NULL;
 	lo->ioctl = NULL;
 	lo->lo_sizelimit = 0;
@@ -1049,6 +1096,8 @@ out_bdev:
 		blkdev_put(bdev, mode | FMODE_EXCL);
 out_putf:
 	fput(file);
+	if (virt_file)
+		fput(virt_file);
 out:
 	/* This is safe: open() is still holding a reference. */
 	module_put(THIS_MODULE);
@@ -1104,6 +1153,7 @@ static void loop_disable_partscan(struct loop_device *lo)
 static int __loop_clr_fd(struct loop_device *lo, bool release)
 {
 	struct file *filp = NULL;
+	struct file *virt_filp = lo->lo_backing_virt_file;
 	gfp_t gfp = lo->old_gfp_mask;
 	struct block_device *bdev = lo->lo_device;
 	int err = 0;
@@ -1127,6 +1177,7 @@ static int __loop_clr_fd(struct loop_device *lo, bool release)
 
 	spin_lock_irq(&lo->lo_lock);
 	lo->lo_backing_file = NULL;
+	lo->lo_backing_virt_file = NULL;
 	spin_unlock_irq(&lo->lo_lock);
 
 	loop_release_xfer(lo);
@@ -1208,6 +1259,8 @@ out_unlock:
 	 */
 	if (filp)
 		fput(filp);
+	if (virt_filp)
+		fput(virt_filp);
 	return err;
 }
 

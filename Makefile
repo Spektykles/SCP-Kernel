@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 5
-PATCHLEVEL = 2
-SUBLEVEL = 0
-EXTRAVERSION =
-NAME = Bobtail Squid
+PATCHLEVEL = 3
+SUBLEVEL = 1
+EXTRAVERSION = -dragon
+NAME = Red Dragon
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"

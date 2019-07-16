@@ -201,7 +201,7 @@ static int rq_qos_wake_function(struct wait_queue_entry *curr,
 	if (!data->cb(data->rqw, data->private_data))
 		return -1;
 
-	data->got_token = true;
+	WRITE_ONCE(data->got_token, true);
 	list_del_init(&curr->entry);
 	wake_up_process(data->task);
 	return 1;
@@ -244,8 +244,9 @@ void rq_qos_wait(struct rq_wait *rqw, void *private_data,
 		return;
 
 	prepare_to_wait_exclusive(&rqw->wait, &data.wq, TASK_UNINTERRUPTIBLE);
+	has_sleeper = !wq_has_single_sleeper(&rqw->wait);
 	do {
-		if (data.got_token)
+		if (READ_ONCE(data.got_token))
 			break;
 		if (!has_sleeper && acquire_inflight_cb(rqw, private_data)) {
 			finish_wait(&rqw->wait, &data.wq);
@@ -255,12 +256,11 @@ void rq_qos_wait(struct rq_wait *rqw, void *private_data,
 			 * which means we now have two. Put our local token
 			 * and wake anyone else potentially waiting for one.
 			 */
-			if (data.got_token)
+			if (READ_ONCE(data.got_token))
 				cleanup_cb(rqw, private_data);
 			break;
 		}
 		io_schedule();
-		has_sleeper = false;
 	} while (1);
 	finish_wait(&rqw->wait, &data.wq);
 }

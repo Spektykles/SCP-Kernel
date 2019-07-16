@@ -569,7 +569,7 @@ static int dpc_probe(struct pcie_device *dev)
 
 	if (dpc->native_dpc) {
 		status = devm_request_threaded_irq(device, dev->irq, dpc_irq,
-						   dpc_handler, IRQF_SHARED,
+						   dpc_handler, IRQF_SHARED | IRQF_ONESHOT,
 						   "pcie-dpc", dpc);
 		if (status) {
 			dev_warn(device, "request IRQ%d failed: %d\n", dev->irq,

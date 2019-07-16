@@ -1314,7 +1314,7 @@ static int aer_probe(struct pcie_device *dev)
 	set_service_data(dev, rpc);
 
 	status = devm_request_threaded_irq(device, dev->irq, aer_irq, aer_isr,
-					   IRQF_SHARED, "aerdrv", dev);
+					   IRQF_SHARED | IRQF_ONESHOT, "aerdrv", dev);
 	if (status) {
 		pci_err(port, "request AER IRQ %d failed\n", dev->irq);
 		return status;

@@ -92,7 +92,7 @@ static int pcie_bandwidth_notification_probe(struct pcie_device *srv)
 
 	ret = request_threaded_irq(srv->irq, pcie_bw_notification_irq,
 				   pcie_bw_notification_handler,
-				   IRQF_SHARED, "PCIe BW notif", srv);
+				   IRQF_SHARED | IRQF_ONESHOT, "PCIe BW notif", srv);
 	if (ret)
 		return ret;
 

@@ -5888,6 +5888,15 @@ search:
 			 */
 			if ((flags & extra) && !(block_group->flags & extra))
 				goto loop;
+
+			/*
+			 * This block group has different flags than we what.
+			 * It's possible that we have MIXED_GROUP flag but no
+			 * block groups is mixed.
+			 * Just skip such block group.
+			 */
+			btrfs_release_block_group(block_group, delalloc);
+			continue;
 		}
 
 have_block_group:

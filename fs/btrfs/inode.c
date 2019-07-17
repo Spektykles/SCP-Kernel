@@ -46,7 +46,6 @@
 #include "backref.h"
 #include "props.h"
 #include "qgroup.h"
-#include "dedupe.h"
 #include "delalloc-space.h"
 
 struct btrfs_iget_args {
@@ -81,8 +80,7 @@ static int btrfs_finish_ordered_io(struct btrfs_ordered_extent *ordered_extent);
 static noinline int cow_file_range(struct inode *inode,
 				   struct page *locked_page,
 				   u64 start, u64 end, int *page_started,
-				   unsigned long *nr_written, int unlock,
-				   struct btrfs_dedupe_hash *hash);
+				   unsigned long *nr_written, int unlock);
 static struct extent_map *create_io_em(struct inode *inode, u64 start, u64 len,
 				       u64 orig_start, u64 block_start,
 				       u64 block_len, u64 orig_block_len,
@@ -741,8 +739,7 @@ retry:
 					     async_extent->start,
 					     async_extent->start +
 					     async_extent->ram_size - 1,
-					     &page_started, &nr_written, 0,
-					     NULL);
+					     &page_started, &nr_written, 0);
 
 			/* JDM XXX */
 
@@ -927,8 +924,7 @@ static u64 get_extent_allocation_hint(struct inode *inode, u64 start,
 static noinline int cow_file_range(struct inode *inode,
 				   struct page *locked_page,
 				   u64 start, u64 end, int *page_started,
-				   unsigned long *nr_written, int unlock,
-				   struct btrfs_dedupe_hash *hash)
+				   unsigned long *nr_written, int unlock)
 {
 	struct btrfs_fs_info *fs_info = btrfs_sb(inode->i_sb);
 	struct btrfs_root *root = BTRFS_I(inode)->root;
@@ -1485,8 +1481,7 @@ out_check:
 		if (cow_start != (u64)-1) {
 			ret = cow_file_range(inode, locked_page,
 					     cow_start, found_key.offset - 1,
-					     page_started, nr_written, 1,
-					     NULL);
+					     page_started, nr_written, 1);
 			if (ret) {
 				if (nocow)
 					btrfs_dec_nocow_writers(fs_info,
@@ -1565,7 +1560,7 @@ out_check:
 	if (cow_start != (u64)-1) {
 		cur_offset = end;
 		ret = cow_file_range(inode, locked_page, cow_start, end,
-				     page_started, nr_written, 1, NULL);
+				     page_started, nr_written, 1);
 		if (ret)
 			goto error;
 	}
@@ -1623,7 +1618,7 @@ int btrfs_run_delalloc_range(struct inode *inode, struct page *locked_page,
 					 page_started, 0, nr_written);
 	} else if (!inode_need_compress(inode, start, end)) {
 		ret = cow_file_range(inode, locked_page, start, end,
-				      page_started, nr_written, 1, NULL);
+				      page_started, nr_written, 1);
 	} else {
 		set_bit(BTRFS_INODE_HAS_ASYNC_EXTENT,
 			&BTRFS_I(inode)->runtime_flags);
@@ -2058,7 +2053,7 @@ static noinline int add_pending_csums(struct btrfs_trans_handle *trans,
 
 int btrfs_set_extent_delalloc(struct inode *inode, u64 start, u64 end,
 			      unsigned int extra_bits,
-			      struct extent_state **cached_state, int dedupe)
+			      struct extent_state **cached_state)
 {
 	WARN_ON(PAGE_ALIGNED(end));
 	return set_extent_delalloc(&BTRFS_I(inode)->io_tree, start, end,
@@ -2124,7 +2119,7 @@ again:
 	 }
 
 	ret = btrfs_set_extent_delalloc(inode, page_start, page_end, 0,
-					&cached_state, 0);
+					&cached_state);
 	if (ret) {
 		mapping_set_error(page->mapping, ret);
 		end_extent_writepage(page, ret, page_start, page_end);
@@ -4919,7 +4914,7 @@ again:
 			  0, 0, &cached_state);
 
 	ret = btrfs_set_extent_delalloc(inode, block_start, block_end, 0,
-					&cached_state, 0);
+					&cached_state);
 	if (ret) {
 		unlock_extent_cached(io_tree, block_start, block_end,
 				     &cached_state);
@@ -8970,7 +8965,7 @@ again:
 			  0, 0, &cached_state);
 
 	ret2 = btrfs_set_extent_delalloc(inode, page_start, end, 0,
-					&cached_state, 0);
+					&cached_state);
 	if (ret2) {
 		unlock_extent_cached(io_tree, page_start, page_end,
 				     &cached_state);

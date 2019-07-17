@@ -56,7 +56,7 @@
 
 static inline void print_scheduler_version(void)
 {
-	printk(KERN_INFO "bmq: BMQ CPU Scheduler 0.97 by Alfred Chen.\n");
+	printk(KERN_INFO "bmq: BMQ CPU Scheduler 0.98 by Alfred Chen.\n");
 }
 
 /**
@@ -145,7 +145,7 @@ DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 #endif
 
 #define WM_BITS	(bmq_BITS + 1)
-#define IDLE_WM	(1)
+#define IDLE_WM	(1ULL)
 
 static cpumask_t sched_rq_watermark[WM_BITS] ____cacheline_aligned_in_smp;
 
@@ -155,20 +155,25 @@ ____cacheline_aligned_in_smp;
 #define SCHED_PRIO2WATERMARK(prio) (IDLE_TASK_SCHED_PRIO - (prio) + 1)
 #define TASK_SCHED_WATERMARK(p) (SCHED_PRIO2WATERMARK((p)->bmq_idx))
 
-#if (bmq_BITS <= BITS_PER_LONG) && (WM_BITS <= BITS_PER_LONG)
+#if (WM_BITS <= BITS_PER_LONG)
+#define __bmq_find_first_bit(bm, size)		__ffs((bm[0]))
 #define bmq_find_first_bit(bm, size)		((bm[0])? __ffs((bm[0])):(size))
+#define __bmq_find_next_bit(bm, size, start)	(__ffs(BITMAP_FIRST_WORD_MASK(start) &\
+						       bm[0]))
 #define bmq_find_next_bit(bm, size, start)	({\
 	unsigned long tmp = (bm[0] & BITMAP_FIRST_WORD_MASK(start));\
 	(tmp)? __ffs(tmp):(size);\
 })
 #else
+#define __bmq_find_first_bit(bm, size)		find_first_bit((bm), (size))
 #define bmq_find_first_bit(bm, size)		find_first_bit((bm), (size))
+#define __bmq_find_next_bit(bm, size, start)	find_next_bit(bm, size, start)
 #define bmq_find_next_bit(bm, size, start)	find_next_bit(bm, size, start)
 #endif
 
 static inline void update_sched_rq_watermark(struct rq *rq)
 {
-	unsigned long watermark = bmq_find_first_bit(rq->queue.bitmap, bmq_BITS);
+	unsigned long watermark = __bmq_find_first_bit(rq->queue.bitmap, bmq_BITS);
 	unsigned long last_wm = rq->watermark;
 	int cpu;
 
@@ -193,11 +198,11 @@ static inline void update_sched_rq_watermark(struct rq *rq)
 	if (!static_branch_likely(&sched_smt_present))
 		return;
 
-	if (1ULL == last_wm) {
+	if (IDLE_WM == last_wm) {
 		if (!cpumask_andnot(&sched_rq_watermark[0],
 				    &sched_rq_watermark[0], cpu_smt_mask(cpu)))
 			clear_bit(0, sched_rq_watermark_bitmap);
-	} else if (1ULL == watermark) {
+	} else if (IDLE_WM == watermark) {
 		cpumask_t tmp;
 
 		cpumask_and(&tmp, cpu_smt_mask(cpu), &sched_rq_watermark[IDLE_WM]);
@@ -259,7 +264,7 @@ static inline void bmq_add_task(struct task_struct *p, struct bmq *q, int idx)
  */
 static inline struct task_struct *rq_first_bmq_task(struct rq *rq)
 {
-	unsigned long idx = bmq_find_first_bit(rq->queue.bitmap, bmq_BITS);
+	unsigned long idx = __bmq_find_first_bit(rq->queue.bitmap, bmq_BITS);
 	const struct list_head *head = &rq->queue.heads[idx];
 
 	BUG_ON(list_empty(head));
@@ -274,7 +279,7 @@ rq_next_bmq_task(struct task_struct *p, struct rq *rq)
 
 	BUG_ON(list_empty(head));
 	if (list_is_last(&p->bmq_node, head)) {
-		idx = bmq_find_next_bit(rq->queue.bitmap, bmq_BITS, idx + 1);
+		idx = __bmq_find_next_bit(rq->queue.bitmap, bmq_BITS, idx + 1);
 		head = &rq->queue.heads[idx];
 
 		BUG_ON(list_empty(head));
@@ -596,11 +601,7 @@ static inline void sched_update_tick_dependency(struct rq *rq) { }
 #endif
 
 /*
- * Removing from the runqueue. Deleting a task from the skip list is done
- * via the stored node reference in the task struct and does not require a full
- * look up. Thus it occurs in O(k) time where k is the "level" of the list the
- * task was stored at - usually < 4, max 16.
- *
+ * Removing from the runqueue.
  * Context: rq->lock
  */
 static inline void dequeue_task(struct task_struct *p, struct rq *rq, int flags)
@@ -629,7 +630,6 @@ static inline void dequeue_task(struct task_struct *p, struct rq *rq, int flags)
 
 /*
  * Adding task to the runqueue.
- *
  * Context: rq->lock
  */
 static inline void enqueue_task(struct task_struct *p, struct rq *rq, int flags)
@@ -928,7 +928,7 @@ static void activate_task(struct task_struct *p, struct rq *rq)
 	if (task_contributes_to_load(p))
 		rq->nr_uninterruptible--;
 	enqueue_task(p, rq, ENQUEUE_WAKEUP);
-	p->on_rq = 1;
+	p->on_rq = TASK_ON_RQ_QUEUED;
 	cpufreq_update_util(rq, 0);
 }
 
@@ -5686,8 +5686,8 @@ void __init sched_init(void)
 	wait_bit_init();
 
 #ifdef CONFIG_SMP
-	cpumask_copy(&sched_rq_watermark[1], cpu_present_mask);
-	set_bit(1, sched_rq_watermark_bitmap);
+	cpumask_copy(&sched_rq_watermark[IDLE_WM], cpu_present_mask);
+	set_bit(IDLE_WM, sched_rq_watermark_bitmap);
 #endif
 
 #ifdef CONFIG_CGROUP_SCHED

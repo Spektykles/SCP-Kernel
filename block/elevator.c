@@ -615,7 +615,11 @@ int elevator_init_mq(struct request_queue *q)
 	if (unlikely(q->elevator))
 		goto out_unlock;
 
-	e = elevator_get(q, "mq-deadline", false);
+#if defined(CONFIG_AVL_INTERACTIVE) && defined(CONFIG_IOSCHED_BFQ)
+	e = elevator_get(q, "bfq-mq", false);
+#else
+	e = elevator_get(q, "bfq", false);
+#endif
 	if (!e)
 		goto out_unlock;
 

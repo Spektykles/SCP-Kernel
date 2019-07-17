@@ -33,18 +33,32 @@ struct linux_logo {
 	const unsigned char *data;
 };
 
-extern const struct linux_logo logo_linux_mono;
-extern const struct linux_logo logo_linux_vga16;
-extern const struct linux_logo logo_linux_clut224;
-extern const struct linux_logo logo_dec_clut224;
-extern const struct linux_logo logo_mac_clut224;
-extern const struct linux_logo logo_parisc_clut224;
-extern const struct linux_logo logo_sgi_clut224;
-extern const struct linux_logo logo_sun_clut224;
-extern const struct linux_logo logo_superh_mono;
-extern const struct linux_logo logo_superh_vga16;
-extern const struct linux_logo logo_superh_clut224;
-extern const struct linux_logo logo_spe_clut224;
+extern const struct linux_logo __initconst logo_linux_mono;
+extern const struct linux_logo __initconst logo_linux_vga16;
+extern const struct linux_logo __initconst logo_linux_clut224;
+extern const struct linux_logo __initconst logo_blackfin_vga16;
+extern const struct linux_logo __initconst logo_blackfin_clut224;
+extern const struct linux_logo __initconst logo_dragon_clut224;
+extern const struct linux_logo __initconst logo_wip_clut224;
+extern const struct linux_logo __initconst logo_arch_clut224;
+extern const struct linux_logo __initconst logo_gentoo_clut224;
+extern const struct linux_logo __initconst logo_exherbo_clut224;
+extern const struct linux_logo __initconst logo_slackware_clut224;
+extern const struct linux_logo __initconst logo_debian_clut224;
+extern const struct linux_logo __initconst logo_fedorasimple_clut224;
+extern const struct linux_logo __initconst logo_fedoraglossy_clut224;
+extern const struct linux_logo __initconst logo_tits_clut224;
+extern const struct linux_logo __initconst logo_bsd_clut224;
+extern const struct linux_logo __initconst logo_fbsd_clut224;
+extern const struct linux_logo __initconst logo_dec_clut224;
+extern const struct linux_logo __initconst logo_mac_clut224;
+extern const struct linux_logo __initconst logo_parisc_clut224;
+extern const struct linux_logo __initconst logo_sgi_clut224;
+extern const struct linux_logo __initconst logo_sun_clut224;
+extern const struct linux_logo __initconst logo_superh_mono;
+extern const struct linux_logo __initconst logo_superh_vga16;
+extern const struct linux_logo __initconst logo_superh_clut224;
+extern const struct linux_logo __initconst logo_spe_clut224;
 
 extern const struct linux_logo *fb_find_logo(int depth);
 #ifdef CONFIG_FB_LOGO_EXTRA

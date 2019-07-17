@@ -9491,6 +9491,7 @@ unlock:
  * This routine will record that the CPU is going idle with tick stopped.
  * This info will be used in performing idle load balancing in the future.
  */
+#ifndef CONFIG_SCHED_BMQ
 void nohz_balance_enter_idle(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
@@ -9546,6 +9547,7 @@ out:
 	 */
 	WRITE_ONCE(nohz.has_blocked, 1);
 }
+#endif /* CONFIG_SCHED_BMQ */
 
 /*
  * Internal function that runs load balance for all idle cpus. The load balance

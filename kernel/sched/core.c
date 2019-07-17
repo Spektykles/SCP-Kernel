@@ -539,6 +539,7 @@ void resched_cpu(int cpu)
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
 
+#ifndef CONFIG_SCHED_BMQ
 #ifdef CONFIG_SMP
 #ifdef CONFIG_NO_HZ_COMMON
 /*
@@ -698,6 +699,7 @@ bool sched_can_stop_tick(struct rq *rq)
 }
 #endif /* CONFIG_NO_HZ_FULL */
 #endif /* CONFIG_SMP */
+#endif /* CONFIG_SCHED_BMQ */
 
 #if defined(CONFIG_RT_GROUP_SCHED) || (defined(CONFIG_FAIR_GROUP_SCHED) && \
 			(defined(CONFIG_SMP) || defined(CONFIG_CFS_BANDWIDTH)))

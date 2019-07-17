@@ -197,6 +197,7 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
  * based on the task model parameters and gives the minimal utilization
  * required to meet deadlines.
  */
+#ifndef CONFIG_SCHED_BMQ
 unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 				 unsigned long max, enum schedutil_type type,
 				 struct task_struct *p)
@@ -282,12 +283,6 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 
 	return min(max, util);
 }
-#else /* CONFIG_SCHED_BMQ */
-static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
-{
-	sg_cpu->max = arch_scale_cpu_capacity(NULL, sg_cpu->cpu);
-	return sg_cpu->max;
-}
 #endif
 
 static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
@@ -301,6 +296,13 @@ static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
 
 	return schedutil_cpu_util(sg_cpu->cpu, util, max, FREQUENCY_UTIL, NULL);
 }
+#else /* CONFIG_SCHED_BMQ */
+static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)
+{
+	sg_cpu->max = arch_scale_cpu_capacity(sg_cpu->cpu);
+	return sg_cpu->max;
+}
+#endif
 
 /**
  * sugov_iowait_reset() - Reset the IO boost status of a CPU.

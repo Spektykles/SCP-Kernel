@@ -6,7 +6,8 @@
  * This is the interface between the scheduler and nohz/dynticks:
  */
 
-#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON)
+
+#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON) && !defined(CONFIG_SCHED_BMQ)
 extern void nohz_balance_enter_idle(int cpu);
 extern int get_nohz_timer_target(void);
 #else

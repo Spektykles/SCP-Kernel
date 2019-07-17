@@ -1040,8 +1040,7 @@ static int qca_set_baudrate(struct hci_dev *hdev, uint8_t baudrate)
 		usleep_range(100, 200);
 
 	if (hu->serdev)
-		serdev_device_wait_until_sent(hu->serdev,
-		      msecs_to_jiffies(CMD_TRANS_TIMEOUT_MS));
+	schedule_msec_hrtimeout((CMD_TRANS_TIMEOUT_MS));
 
 	/* Give the controller time to process the request */
 	if (qca_is_wcn399x(qca_soc_type(hu)))

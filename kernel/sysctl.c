@@ -67,11 +67,8 @@
 #include <linux/kexec.h>
 #include <linux/bpf.h>
 #include <linux/mount.h>
-<<<<<<< HEAD
 #include <linux/userfaultfd_k.h>
-=======
 #include <linux/tty.h>
->>>>>>> 0ecdde5947e7... security: tty: make TIOCSTI ioctl require CAP_SYS_ADMIN
 
 #include "../lib/kstrtox.h"
 
